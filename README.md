@@ -140,6 +140,18 @@ const result: Uint8Array | undefined = ffmpeg
   .export();
 ```
 
+Need to supply additional FFmpeg flags? Use `otherArgs`:
+
+```typescript
+const command = await ffmpeg
+  .input({ source: file })
+  .input({ source: overlay })
+  .complexFilter('overlay=0:0')
+  .otherArgs(['-progress', '-', '-v', 'error', '-y'])
+  .ouput({ format: 'mp4', path: 'output.mp4' })
+  .command();
+```
+
 > If you were wondering, yes the memory is being managed for you.
 
 ## 📖 Examples

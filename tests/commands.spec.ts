@@ -109,8 +109,8 @@ test.describe('FFmpeg create command', async () => {
       command
         .join(' ')
         .startsWith(
-          '-i ccc.mp4 -vf rotate=90 -af silencedetect=noise=0.0001 -ss 10'
-        )
+          '-i ccc.mp4 -vf rotate=90 -af silencedetect=noise=0.0001 -ss 10',
+        ),
     ).toBe(true);
     expect(command.at(-1)?.endsWith('.m4v')).toBe(true);
   });
@@ -254,5 +254,25 @@ test.describe('FFmpeg create command', async () => {
     });
 
     expect(command.at(2)).toBe('-an');
+  });
+
+  test('test that other args can be appended', async () => {
+    const command = await page.evaluate(async () => {
+      return await ffmpeg
+        .input({ source: 'ccc.mp4' })
+        .otherArgs(['-progress', '-', '-v', 'error', '-y'])
+        .ouput({ format: 'm4v' })
+        .command();
+    });
+
+    const progIdx = command.indexOf('-progress');
+    expect(progIdx).toBeGreaterThan(-1);
+    expect(command[progIdx + 1]).toBe('-');
+
+    const vIdx = command.indexOf('-v');
+    expect(vIdx).toBeGreaterThan(-1);
+    expect(command[vIdx + 1]).toBe('error');
+
+    expect(command.includes('-y')).toBe(true);
   });
 });
