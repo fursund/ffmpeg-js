@@ -1,7 +1,6 @@
 import * as types from './types';
 export declare class FFmpegBase {
-    private _module;
-    private _ffmpeg;
+    private _worker;
     private _logger;
     private _source;
     private _uris?;
@@ -10,6 +9,8 @@ export declare class FFmpegBase {
     private _onMessage;
     private _onProgress;
     private _memory;
+    private _pendingMessages;
+    private _messageIdCounter;
     /**
      * Is true when the script has been
      * loaded successfully
@@ -22,9 +23,9 @@ export declare class FFmpegBase {
     private handleMessage;
     private handleScriptLoadError;
     private createScriptURIs;
-    private handleLocateFile;
-    private handleScriptLoad;
-    private createFFmpegScript;
+    private generateMessageId;
+    private sendWorkerMessage;
+    private createWorker;
     /**
      * Gets called when ffmpeg has been
      * initiated successfully and is ready
@@ -60,23 +61,15 @@ export declare class FFmpegBase {
      */
     exec(args: string[]): Promise<void>;
     /**
-     * This method allocates memory required
-     * to execute the command
-     */
-    private parseArgs;
-    /**
      * Read a file that is stored in the memfs
      */
-    readFile(path: string): Uint8Array;
+    readFile(path: string): Promise<Uint8Array>;
     /**
      * Delete a file that is stored in the memfs
      */
-    deleteFile(path: string): void;
+    deleteFile(path: string): Promise<void>;
     /**
-     * Write a file to the memfs, the first argument
-     * is the file name to use. The second argument
-     * needs to contain an url to the file or the file
-     * as a blob
+     * Write a file to the memfs
      */
     writeFile(path: string, file: string | Blob): Promise<void>;
     /**

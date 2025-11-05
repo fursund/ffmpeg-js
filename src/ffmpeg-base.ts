@@ -466,11 +466,9 @@ export class FFmpegBase {
 
       // Handle progress messages
       if (type === 'progress' && payload) {
-        this._logger(`[Progress] Received from worker: ${JSON.stringify(payload)}`);
-        
         // Progress object can have different structures in 0.12
         // It might be { progress: number, time: number } or just a number
-        let progressValue = null;
+        let progressValue: number | { time: number } | null = null;
         
         // Helper to validate progress values - reject obviously invalid values
         const isValidProgress = (value: number): boolean => {
@@ -499,7 +497,11 @@ export class FFmpegBase {
         }
         
         if (progressValue !== null) {
-          this._onProgress.forEach((cb) => cb(progressValue));
+          // ProgressCallback expects a number, so convert object to number if needed
+          const progressNumber = typeof progressValue === 'number' 
+            ? progressValue 
+            : progressValue.time || 0;
+          this._onProgress.forEach((cb) => cb(progressNumber));
         }
         return;
       }
@@ -523,6 +525,10 @@ export class FFmpegBase {
     };
 
     // Load the core in the worker
+    if (!this._uris) {
+      throw new Error('URIs not initialized');
+    }
+    
     try {
       await this.sendWorkerMessage('load', {
         coreURL: this._uris.core,

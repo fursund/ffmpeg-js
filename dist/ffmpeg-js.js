@@ -1,240 +1,604 @@
-var g = Object.defineProperty;
-var w = (o, t, e) => t in o ? g(o, t, { enumerable: !0, configurable: !0, writable: !0, value: e }) : o[t] = e;
-var h = (o, t, e) => (w(o, typeof t != "symbol" ? t + "" : t, e), e);
-const b = async (o) => {
-  let t;
-  return typeof o == "string" ? t = await (await fetch(o)).arrayBuffer() : t = await await o.arrayBuffer(), new Uint8Array(t);
-}, d = async (o) => {
-  var i;
-  const t = {
+var w = Object.defineProperty;
+var b = (l, s, e) => s in l ? w(l, s, { enumerable: !0, configurable: !0, writable: !0, value: e }) : l[s] = e;
+var g = (l, s, e) => (b(l, typeof s != "symbol" ? s + "" : s, e), e);
+const y = async (l) => {
+  let s;
+  return typeof l == "string" ? s = await (await fetch(l)).arrayBuffer() : s = await await l.arrayBuffer(), new Uint8Array(s);
+}, h = async (l) => {
+  var o;
+  const s = {
     js: "application/javascript",
     wasm: "application/wasm"
-  }, e = await (await fetch(o)).arrayBuffer(), s = new Blob([e], {
-    type: t[((i = o.split(".")) == null ? void 0 : i.at(-1)) ?? "js"]
+  }, e = await (await fetch(l)).arrayBuffer(), r = l.includes(".worker.js") ? "js" : ((o = l.split(".")) == null ? void 0 : o.at(-1)) ?? "js", t = new Blob([e], {
+    type: s[r] || "application/javascript"
   });
-  return URL.createObjectURL(s);
-}, _ = (o, ...t) => {
-}, y = (o) => {
-  var e, s, i;
-  const t = (i = (s = (e = o.match(/(^frame=)(\W)*([0-9]{1,})(\W)/)) == null ? void 0 : e.at(0)) == null ? void 0 : s.replace(/frame=/, "")) == null ? void 0 : i.trim();
-  return parseInt(t ?? "0");
-}, F = (o) => (t) => {
-  var e, s, i, r, a, c, n, m;
-  if (t.match(/Input #/) && Object.assign(o, {
-    formats: t.replace(/(Input #|from 'probe')/gm, "").split(",").map((u) => u.trim()).filter((u) => u.length > 1)
-  }), t.match(/Duration:/)) {
-    const u = t.split(",");
-    for (const f of u) {
+  return URL.createObjectURL(t);
+}, m = (l, ...s) => {
+}, _ = (l) => (s) => {
+  var e, r, t, o, i, n, a, u;
+  if (s.match(/Input #/) && Object.assign(l, {
+    formats: s.replace(/(Input #|from 'probe')/gm, "").split(",").map((c) => c.trim()).filter((c) => c.length > 1)
+  }), s.match(/Duration:/)) {
+    const c = s.split(",");
+    for (const f of c) {
       if (f.match(/Duration:/)) {
         const p = f.replace(/Duration:/, "").trim();
-        Object.assign(o, {
+        Object.assign(l, {
           duration: Date.parse(`01 Jan 1970 ${p} GMT`) / 1e3
         });
       }
       if (f.match(/bitrate:/)) {
         const p = f.replace(/bitrate:/, "").trim();
-        Object.assign(o, { bitrate: p });
+        Object.assign(l, { bitrate: p });
       }
     }
   }
-  if (t.match(/Stream #/)) {
-    const u = t.split(","), f = {
-      id: (s = (e = u == null ? void 0 : u.at(0)) == null ? void 0 : e.match(/[0-9]{1,2}:[0-9]{1,2}/)) == null ? void 0 : s.at(0)
+  if (s.match(/Stream #/)) {
+    const c = s.split(","), f = {
+      id: (r = (e = c == null ? void 0 : c.at(0)) == null ? void 0 : e.match(/[0-9]{1,2}:[0-9]{1,2}/)) == null ? void 0 : r.at(0)
     };
-    if (t.match(/Video/)) {
+    if (s.match(/Video/)) {
       const p = f;
-      for (const l of u)
-        l.match(/Video:/) && Object.assign(p, {
-          codec: (a = (r = (i = l.match(/Video:\W*[a-z0-9_-]*\W/i)) == null ? void 0 : i.at(0)) == null ? void 0 : r.replace(/Video:/, "")) == null ? void 0 : a.trim()
-        }), l.match(/[0-9]*x[0-9]*/) && (Object.assign(p, { width: parseFloat(l.split("x")[0]) }), Object.assign(p, { height: parseFloat(l.split("x")[1]) })), l.match(/fps/) && Object.assign(p, {
-          fps: parseFloat(l.replace("fps", "").trim())
+      for (const d of c)
+        d.match(/Video:/) && Object.assign(p, {
+          codec: (i = (o = (t = d.match(/Video:\W*[a-z0-9_-]*\W/i)) == null ? void 0 : t.at(0)) == null ? void 0 : o.replace(/Video:/, "")) == null ? void 0 : i.trim()
+        }), d.match(/[0-9]*x[0-9]*/) && (Object.assign(p, { width: parseFloat(d.split("x")[0]) }), Object.assign(p, { height: parseFloat(d.split("x")[1]) })), d.match(/fps/) && Object.assign(p, {
+          fps: parseFloat(d.replace("fps", "").trim())
         });
-      o.streams.video.push(p);
+      l.streams.video.push(p);
     }
-    if (t.match(/Audio/)) {
+    if (s.match(/Audio/)) {
       const p = f;
-      for (const l of u)
-        l.match(/Audio:/) && Object.assign(p, {
-          codec: (m = (n = (c = l.match(/Audio:\W*[a-z0-9_-]*\W/i)) == null ? void 0 : c.at(0)) == null ? void 0 : n.replace(/Audio:/, "")) == null ? void 0 : m.trim()
-        }), l.match(/hz/i) && Object.assign(p, {
-          sampleRate: parseInt(l.replace(/[\D]/gm, ""))
+      for (const d of c)
+        d.match(/Audio:/) && Object.assign(p, {
+          codec: (u = (a = (n = d.match(/Audio:\W*[a-z0-9_-]*\W/i)) == null ? void 0 : n.at(0)) == null ? void 0 : a.replace(/Audio:/, "")) == null ? void 0 : u.trim()
+        }), d.match(/hz/i) && Object.assign(p, {
+          sampleRate: parseInt(d.replace(/[\D]/gm, ""))
         });
-      o.streams.audio.push(p);
+      l.streams.audio.push(p);
     }
   }
 };
-class E {
-  constructor({ logger: t, source: e }) {
-    h(this, "_module");
-    h(this, "_ffmpeg");
-    h(this, "_logger", _);
-    h(this, "_source");
-    h(this, "_uris");
-    h(this, "_whenReady", []);
-    h(this, "_whenExecutionDone", []);
-    h(this, "_onMessage", []);
-    h(this, "_onProgress", []);
-    h(this, "_memory", []);
+class k {
+  constructor({ logger: s, source: e }) {
+    g(this, "_worker", null);
+    g(this, "_logger", m);
+    g(this, "_source");
+    g(this, "_uris");
+    g(this, "_whenReady", []);
+    g(this, "_whenExecutionDone", []);
+    g(this, "_onMessage", []);
+    g(this, "_onProgress", []);
+    g(this, "_memory", []);
+    g(this, "_pendingMessages", /* @__PURE__ */ new Map());
+    g(this, "_messageIdCounter", 0);
     /**
      * Is true when the script has been
      * loaded successfully
      */
-    h(this, "isReady", !1);
-    this._source = e, this._logger = t, this.createFFmpegScript();
+    g(this, "isReady", !1);
+    this._source = e, this._logger = s, this.createWorker();
   }
   /**
    * Handles the ffmpeg logs
    */
-  handleMessage(t) {
-    this._logger(t), t.match(/(FFMPEG_END|error)/i) && this._whenExecutionDone.forEach((e) => e()), t.match(/^frame=/) && this._onProgress.forEach((e) => e(y(t))), this._onMessage.forEach((e) => e(t));
+  handleMessage(s) {
+    this._logger(s), s.match(/(FFMPEG_END|error)/i) && this._whenExecutionDone.forEach((r) => r());
+    const e = s.match(/frame=\s*(\d+)/);
+    if (e) {
+      const r = parseInt(e[1], 10);
+      r > 0 && this._onProgress.forEach((t) => t(r));
+    }
+    this._onMessage.forEach((r) => r(s));
   }
   handleScriptLoadError() {
-    this._logger("Failed to load script!");
+    this._logger("Failed to load core in worker!");
   }
   async createScriptURIs() {
+    const s = await h(this._source), e = await h(this._source.replace(".js", ".wasm"));
+    let r;
+    try {
+      r = await h(this._source.replace(".js", ".worker.js"));
+    } catch {
+      r = void 0;
+    }
     return {
-      core: await d(this._source),
-      wasm: await d(this._source.replace(".js", ".wasm")),
-      worker: await d(this._source.replace(".js", ".worker.js"))
+      core: s,
+      wasm: e,
+      worker: r
     };
   }
-  handleLocateFile(t, e) {
-    var s, i;
-    return t.endsWith("ffmpeg-core.wasm") ? (s = this._uris) == null ? void 0 : s.wasm : t.endsWith("ffmpeg-core.worker.js") ? (i = this._uris) == null ? void 0 : i.worker : e + t;
+  generateMessageId() {
+    return `msg_${Date.now()}_${this._messageIdCounter++}`;
   }
-  async handleScriptLoad() {
-    var e;
-    const t = await createFFmpegCore({
-      mainScriptUrlOrBlob: (e = this._uris) == null ? void 0 : e.core,
-      printErr: this.handleMessage.bind(this),
-      print: this.handleMessage.bind(this),
-      locateFile: this.handleLocateFile.bind(this)
+  sendWorkerMessage(s, e) {
+    return new Promise((r, t) => {
+      if (!this._worker) {
+        t(new Error("Worker not initialized"));
+        return;
+      }
+      const o = this.generateMessageId();
+      this._pendingMessages.set(o, { resolve: r, reject: t }), this._worker.postMessage({ id: o, type: s, payload: e });
+      const i = s === "exec" ? 3e5 : 3e4;
+      setTimeout(() => {
+        this._pendingMessages.has(o) && (this._pendingMessages.delete(o), t(new Error(`Worker message timeout: ${s} (${i}ms)`)));
+      }, i);
     });
-    this._logger("CREATED FFMPEG WASM:", t), this.isReady = !0, this._module = t, this._ffmpeg = this._module.cwrap("proxy_main", "number", [
-      "number",
-      "number"
-    ]), this._whenReady.forEach((s) => s());
   }
-  async createFFmpegScript() {
-    const t = document.createElement("script");
-    this._uris = await this.createScriptURIs(), t.src = this._uris.core, t.type = "text/javascript", t.addEventListener("load", this.handleScriptLoad.bind(this)), t.addEventListener("error", this.handleScriptLoadError.bind(this)), document.head.appendChild(t);
+  async createWorker() {
+    this._uris = await this.createScriptURIs();
+    const s = `
+      let core = null;
+      
+      // Helper to load script - handle both blob URLs and regular URLs
+      function loadScript(url) {
+        return new Promise((resolve, reject) => {
+          try {
+            importScripts(url);
+            resolve();
+          } catch (error) {
+            reject(error);
+          }
+        });
+      }
+      
+      async function loadCore(config) {
+        try {
+          // Load the core script first
+          // Try importScripts first (for classic workers)
+          try {
+            await loadScript(config.coreURL);
+          } catch (error) {
+            // If importScripts fails, try dynamic import (for module workers)
+            // Note: Dynamic import in workers may not work in all environments
+            // If this fails, we'll rely on the original error
+            throw error;
+          }
+          
+          // Verify createFFmpegCore is available
+          if (typeof createFFmpegCore === 'undefined') {
+            throw new Error('createFFmpegCore is not defined after loading core script');
+          }
+        } catch (error) {
+          throw error;
+        }
+        
+        // Determine wasmURL and workerURL
+        // If not provided, derive from coreURL (as per official implementation)
+        const coreURL = config.coreURL;
+        const wasmURL = config.wasmURL || coreURL.replace(/.js$/g, '.wasm');
+        const workerURL = config.workerURL || coreURL.replace(/.js$/g, '.worker.js');
+        
+        // Encode wasmURL and workerURL in mainScriptUrlOrBlob (as per official implementation)
+        // This is a hack to fix locateFile issue with multi-threaded ffmpeg-core
+        const urlConfig = {
+          wasmURL: wasmURL,
+          workerURL: workerURL,
+        };
+        const encodedConfig = btoa(JSON.stringify(urlConfig));
+        const mainScriptUrlOrBlob = coreURL + '#' + encodedConfig;
+        
+        // Create the core - only pass mainScriptUrlOrBlob (as per official implementation)
+        core = await createFFmpegCore({
+          mainScriptUrlOrBlob,
+        });
+        
+        // Wait for core to be ready
+        if (core.ready && typeof core.ready.then === 'function') {
+          await core.ready;
+        }
+        
+        // Set up logger callback
+        const loggerCallback = (logObj) => {
+          const message = logObj?.message || String(logObj || '');
+          if (message && message.trim()) {
+            // Always forward log messages to main thread
+            self.postMessage({
+              type: 'log',
+              payload: { type: logObj.type || 'stdout', message },
+            });
+          }
+        };
+        
+        if (typeof core.setLogger === 'function') {
+          core.setLogger(loggerCallback);
+        } else if (core.logger !== undefined) {
+          core.logger = loggerCallback;
+        }
+        
+        // Set up progress callback
+        // Helper to validate progress values - reject obviously invalid values
+        const isValidProgress = (value) => {
+          if (typeof value !== 'number' || !isFinite(value)) return false;
+          // If it's a percentage (0-1), it should be in that range
+          if (value >= 0 && value <= 1) return true;
+          // If it's a frame number, it should be reasonable (not billions)
+          // Frame numbers typically don't exceed 10 million for reasonable videos
+          if (value > 0 && value < 10000000) return true;
+          return false;
+        };
+        
+        const progressCallback = (progressObj) => {
+          // Validate progress values before sending to main thread
+          // The FFmpeg core sometimes sends invalid/uninitialized values
+          let validProgress = null;
+          
+          if (typeof progressObj === 'number') {
+            if (isValidProgress(progressObj)) {
+              validProgress = progressObj;
+            } else {
+              return;
+            }
+          } else if (progressObj && typeof progressObj.progress === 'number') {
+            if (isValidProgress(progressObj.progress)) {
+              validProgress = progressObj.progress;
+            } else {
+              return;
+            }
+          } else if (progressObj && typeof progressObj.time === 'number') {
+            // Validate time value - should be reasonable (not MAX_SAFE_INTEGER or negative huge values)
+            if (isFinite(progressObj.time) && progressObj.time >= 0 && progressObj.time < 86400 * 365) {
+              // Time-only progress is valid, but we can't determine percentage
+              // Still forward it, but main thread will handle it appropriately
+              validProgress = progressObj;
+            } else {
+              return;
+            }
+          }
+          
+          // Only send if we have valid progress data
+          if (validProgress !== null) {
+            self.postMessage({
+              type: 'progress',
+              payload: typeof validProgress === 'number' ? validProgress : progressObj,
+            });
+          }
+        };
+        
+        if (typeof core.setProgress === 'function') {
+          core.setProgress(progressCallback);
+        } else if (core.progress !== undefined) {
+          core.progress = progressCallback;
+        }
+        
+        return core;
+      }
+      
+      self.onmessage = async (event) => {
+        const { id, type, payload } = event.data;
+        
+        try {
+          switch (type) {
+            case 'load': {
+              await loadCore(payload);
+              self.postMessage({
+                id,
+                type: 'load',
+                success: true,
+                payload: { ready: true },
+              });
+              break;
+            }
+            
+            case 'exec': {
+              if (!core) {
+                throw new Error('Core not loaded');
+              }
+              
+              try {
+                // Track if we see "Aborted()" message and progress
+                let aborted = false;
+                let progressReached100 = false;
+                const originalLogger = core.logger;
+                const originalProgress = core.progress;
+                
+                // Wrap logger to detect aborts
+                const wrappedLogger = (logObj) => {
+                  if (originalLogger) {
+                    originalLogger(logObj);
+                  }
+                  const message = logObj?.message || String(logObj || '');
+                  if (message && message.trim() === 'Aborted()') {
+                    aborted = true;
+                  }
+                };
+                
+                // Wrap progress callback to track if we reached 100%
+                const wrappedProgress = (progressObj) => {
+                  if (originalProgress) {
+                    originalProgress(progressObj);
+                  }
+                  // Check if progress reached 100%
+                  if (typeof progressObj === 'number') {
+                    if (progressObj >= 1.0) {
+                      progressReached100 = true;
+                    }
+                  } else if (progressObj && typeof progressObj.progress === 'number') {
+                    if (progressObj.progress >= 1.0) {
+                      progressReached100 = true;
+                    }
+                  }
+                };
+                
+                // Temporarily replace logger and progress to detect aborts and completion
+                core.logger = wrappedLogger;
+                core.progress = wrappedProgress;
+                
+                // Ensure -loglevel is set to 'info' to see frame progress messages
+                // FFmpeg by default might not output verbose logs during encoding
+                let execArgs = [...payload.args];
+                const hasLogLevel = execArgs.some((arg, idx) => 
+                  arg === '-loglevel' || arg === '-v' || 
+                  (idx > 0 && (execArgs[idx - 1] === '-loglevel' || execArgs[idx - 1] === '-v'))
+                );
+                if (!hasLogLevel) {
+                  // Insert -loglevel info after the input file (usually after -i)
+                  // This ensures we see frame progress messages during encoding
+                  const inputIndex = execArgs.findIndex(arg => arg === '-i');
+                  if (inputIndex >= 0 && inputIndex < execArgs.length - 1) {
+                    execArgs.splice(inputIndex + 2, 0, '-loglevel', 'info');
+                  } else {
+                    // If no -i found, prepend to args
+                    execArgs.unshift('-loglevel', 'info');
+                  }
+                }
+                
+                // Handle timeout (if provided)
+                const timeout = payload.timeout !== undefined ? payload.timeout : -1;
+                if (typeof core.setTimeout === 'function') {
+                  core.setTimeout(timeout);
+                }
+                
+                // Execute the command - in 0.12, exec() is synchronous and blocks until completion
+                // It returns the ret value directly when done
+                core.exec(...execArgs);
+                
+                // Restore original logger and progress
+                core.logger = originalLogger;
+                core.progress = originalProgress;
+                
+                // Get the return value from core.ret
+                const ret = (core.ret !== undefined) ? core.ret : -1;
+                
+                // Reset the core state (as per official implementation)
+                if (typeof core.reset === 'function') {
+                  core.reset();
+                }
+                
+                // If we saw "Aborted()" but progress reached 100%, that's OK (normal shutdown)
+                // Otherwise, abort is a failure
+                const abortedButComplete = aborted && progressReached100;
+                const success = (ret === 0) || abortedButComplete;
+                
+                // Send response
+                self.postMessage({
+                  id,
+                  type: 'exec',
+                  success,
+                  payload: { ret: abortedButComplete ? 0 : ret },
+                  error: !success ? (aborted && !progressReached100 ? 'FFmpeg execution was aborted before completion' : 'Execution failed with exit code ' + ret) : undefined,
+                });
+              } catch (error) {
+                // Handle execution errors
+                const errorMsg = error && error.message ? error.message : String(error);
+                self.postMessage({
+                  id,
+                  type: 'exec',
+                  success: false,
+                  payload: { ret: -1 },
+                  error: errorMsg,
+                });
+              }
+              break;
+            }
+            
+            case 'writeFile': {
+              if (!core) {
+                throw new Error('Core not loaded');
+              }
+              const { path, data } = payload;
+              core.FS.writeFile(path, new Uint8Array(data));
+              self.postMessage({
+                id,
+                type: 'writeFile',
+                success: true,
+              });
+              break;
+            }
+            
+            case 'readFile': {
+              if (!core) {
+                throw new Error('Core not loaded');
+              }
+              const { path } = payload;
+              const data = core.FS.readFile(path);
+              // Convert to array for transfer
+              self.postMessage({
+                id,
+                type: 'readFile',
+                success: true,
+                payload: { data: Array.from(data) },
+              });
+              break;
+            }
+            
+            case 'deleteFile': {
+              if (!core) {
+                throw new Error('Core not loaded');
+              }
+              const { path } = payload;
+              try {
+                core.FS.unlink(path);
+                self.postMessage({
+                  id,
+                  type: 'deleteFile',
+                  success: true,
+                });
+              } catch (error) {
+                self.postMessage({
+                  id,
+                  type: 'deleteFile',
+                  success: false,
+                  error: error?.message || String(error),
+                });
+              }
+              break;
+            }
+            
+            default:
+              self.postMessage({
+                id,
+                type: 'error',
+                success: false,
+                error: 'Unknown message type: ' + type,
+              });
+          }
+        } catch (error) {
+          self.postMessage({
+            id,
+            type,
+            success: false,
+            error: error?.message || String(error),
+          });
+        }
+      };
+    `, e = new Blob([s], { type: "application/javascript" }), r = URL.createObjectURL(e);
+    if (this._worker = new Worker(r), this._worker.onmessage = (t) => {
+      const { id: o, type: i, success: n, payload: a, error: u } = t.data;
+      if (i === "log" && a) {
+        this.handleMessage(a.message);
+        return;
+      }
+      if (i === "progress" && a) {
+        let c = null;
+        const f = (p) => isFinite(p) ? p >= 0 && p <= 1 || p > 0 && p < 1e7 : !1;
+        if (typeof a == "number" ? f(a) && (c = a) : a && typeof a.progress == "number" ? f(a.progress) && (c = a.progress) : a && typeof a.time == "number" && isFinite(a.time) && a.time >= 0 && a.time < 86400 * 365 && (c = a), c !== null) {
+          const p = typeof c == "number" ? c : c.time || 0;
+          this._onProgress.forEach((d) => d(p));
+        }
+        return;
+      }
+      if (o && this._pendingMessages.has(o)) {
+        const { resolve: c, reject: f } = this._pendingMessages.get(o);
+        this._pendingMessages.delete(o), n ? c(a) : f(new Error(u || "Unknown error"));
+      }
+    }, this._worker.onerror = (t) => {
+      this._logger("Worker error:", t), this.handleMessage(`Worker error: ${t.message}`);
+    }, !this._uris)
+      throw new Error("URIs not initialized");
+    try {
+      await this.sendWorkerMessage("load", {
+        coreURL: this._uris.core,
+        wasmURL: this._uris.wasm,
+        workerURL: this._uris.worker
+      }), this.isReady = !0, this._whenReady.forEach((t) => t());
+    } catch (t) {
+      this._logger("Failed to load core in worker:", t), this.handleScriptLoadError();
+    }
   }
   /**
    * Gets called when ffmpeg has been
    * initiated successfully and is ready
    * to receive commands
    */
-  whenReady(t) {
-    this.isReady ? t() : this._whenReady.push(t);
+  whenReady(s) {
+    this.isReady ? s() : this._whenReady.push(s);
   }
   /**
    * Gets called when ffmpeg is done executing
    * a script
    */
-  whenExecutionDone(t) {
-    this._whenExecutionDone.push(t);
+  whenExecutionDone(s) {
+    this._whenExecutionDone.push(s);
   }
   /**
    * Gets called when ffmpeg logs a message
    */
-  onMessage(t) {
-    this._onMessage.push(t);
+  onMessage(s) {
+    this._onMessage.push(s);
   }
   /**
    * Remove the callback function from the
    * message callbacks
    */
-  removeOnMessage(t) {
-    this._onMessage = this._onMessage.filter((e) => e != t);
+  removeOnMessage(s) {
+    this._onMessage = this._onMessage.filter((e) => e != s);
   }
   /**
    * Gets called when a number of frames
    * has been rendered
    */
-  onProgress(t) {
-    this._onProgress.push(t);
+  onProgress(s) {
+    this._onProgress.push(s);
   }
   /**
    * Remove the callback function from the
    * progress callbacks
    */
-  removeOnProgress(t) {
-    this._onProgress = this._onProgress.filter((e) => e != t);
+  removeOnProgress(s) {
+    this._onProgress = this._onProgress.filter((e) => e != s);
   }
   /**
    * Use this message to execute ffmpeg commands
    */
-  async exec(t) {
+  async exec(s) {
     var e;
-    this._ffmpeg(...this.parseArgs(["./ffmpeg", "-nostdin", "-y", ...t])), await new Promise((s) => {
-      this.whenExecutionDone(s);
-    }), (e = t.at(-1)) != null && e.match(/\S\.[A-Za-z0-9_-]{1,20}/) && this._memory.push(t.at(-1) ?? "");
-  }
-  /**
-   * This method allocates memory required
-   * to execute the command
-   */
-  parseArgs(t) {
-    const e = this._module._malloc(
-      t.length * Uint32Array.BYTES_PER_ELEMENT
-    );
-    return t.forEach((s, i) => {
-      const r = this._module.lengthBytesUTF8(s) + 1, a = this._module._malloc(r);
-      this._module.stringToUTF8(s, a, r), this._module.setValue(
-        e + Uint32Array.BYTES_PER_ELEMENT * i,
-        a,
-        "i32"
-      );
-    }), [t.length, e];
+    if (!this.isReady)
+      throw new Error("FFmpeg is not ready yet. Wait for whenReady() callback.");
+    try {
+      await this.sendWorkerMessage("exec", { args: s }), await new Promise((r) => {
+        this.whenExecutionDone(r);
+      }), (e = s.at(-1)) != null && e.match(/\S\.[A-Za-z0-9_-]{1,20}/) && this._memory.push(s.at(-1) ?? "");
+    } catch (r) {
+      throw r;
+    }
   }
   /**
    * Read a file that is stored in the memfs
    */
-  readFile(t) {
-    return this._logger("READING FILE:", t), this._module.FS.readFile(t);
+  async readFile(s) {
+    const e = await this.sendWorkerMessage("readFile", { path: s });
+    return new Uint8Array(e.data);
   }
   /**
    * Delete a file that is stored in the memfs
    */
-  deleteFile(t) {
+  async deleteFile(s) {
     try {
-      this._logger("DELETING FILE:", t), this._module.FS.unlink(t);
+      await this.sendWorkerMessage("deleteFile", { path: s });
     } catch {
-      this._logger("Could not delete file");
     }
   }
   /**
-   * Write a file to the memfs, the first argument
-   * is the file name to use. The second argument
-   * needs to contain an url to the file or the file
-   * as a blob
+   * Write a file to the memfs
    */
-  async writeFile(t, e) {
-    const s = await b(e);
-    this._logger("WRITING FILE:", t), this._module.FS.writeFile(t, s), this._memory.push(t);
+  async writeFile(s, e) {
+    const r = await y(e);
+    await this.sendWorkerMessage("writeFile", { path: s, data: Array.from(r) }), this._memory.push(s);
   }
   /**
    * Call this method to delete all files that
    * have been written to the memfs memory
    */
   clearMemory() {
-    for (const t of [...new Set(this._memory)])
-      this.deleteFile(t);
+    for (const s of [...new Set(this._memory)])
+      this.deleteFile(s);
     this._memory = [];
   }
 }
-const S = {
-  "lgpl-base": "https://unpkg.com/@diffusion-studio/ffmpeg-lgpl-base@0.0.1/dist/ffmpeg-core.js",
-  "gpl-extended": "https://unpkg.com/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js"
+const O = {
+  "lgpl-base": "/ffmpeg-core.js",
+  "gpl-extended": "/ffmpeg-core.js"
+  // User placed UMD files in public/
 };
-class O extends E {
+class F extends k {
   constructor(e = {}) {
-    let s = console.log, i = S[(e == null ? void 0 : e.config) ?? "lgpl-base"];
-    (e == null ? void 0 : e.log) == !1 && (s = _), e != null && e.source && (i = e.source);
-    super({ logger: s, source: i });
-    h(this, "_inputs", []);
-    h(this, "_output");
-    h(this, "_middleware", []);
+    let r = console.log, t = O[(e == null ? void 0 : e.config) ?? "lgpl-base"];
+    (e == null ? void 0 : e.log) == !1 && (r = m), e != null && e.source && (t = e.source);
+    super({ logger: r, source: t });
+    g(this, "_inputs", []);
+    g(this, "_output");
+    g(this, "_middleware", []);
   }
   /**
    * Get all supported video decoders, encoders and
@@ -251,23 +615,23 @@ class O extends E {
     const e = {
       encoders: {},
       decoders: {}
-    }, s = {
+    }, r = {
       video: JSON.parse(JSON.stringify(e)),
       audio: JSON.parse(JSON.stringify(e))
-    }, i = (r) => {
-      r = r.substring(7).replace(/\W{2,}/, " ").trim();
-      const a = r.split(" "), c = a.shift() ?? "", n = a.join(" ");
-      return { [c]: n };
+    }, t = (o) => {
+      o = o.substring(7).replace(/\W{2,}/, " ").trim();
+      const i = o.split(" "), n = i.shift() ?? "", a = i.join(" ");
+      return { [n]: a };
     };
-    return this.onMessage((r) => {
-      r = r.trim();
-      let a = [];
-      if (r.match(/[DEVASIL\.]{6}\W(?!=)/)) {
-        r.match(/^D.V/) && a.push(["video", "decoders"]), r.match(/^.EV/) && a.push(["video", "encoders"]), r.match(/^D.A/) && a.push(["audio", "decoders"]), r.match(/^.EA/) && a.push(["audio", "encoders"]);
-        for (const [c, n] of a)
-          Object.assign(s[c][n], i(r));
+    return this.onMessage((o) => {
+      o = o.trim();
+      let i = [];
+      if (o.match(/[DEVASIL\.]{6}\W(?!=)/)) {
+        o.match(/^D.V/) && i.push(["video", "decoders"]), o.match(/^.EV/) && i.push(["video", "encoders"]), o.match(/^D.A/) && i.push(["audio", "decoders"]), o.match(/^.EA/) && i.push(["audio", "encoders"]);
+        for (const [n, a] of i)
+          Object.assign(r[n][a], t(o));
       }
-    }), await this.exec(["-codecs"]), s;
+    }), await this.exec(["-codecs"]), r;
   }
   /**
    * Get all supported muxers and demuxers, e.g. mp3, webm etc.
@@ -283,18 +647,18 @@ class O extends E {
     const e = {
       muxers: {},
       demuxers: {}
-    }, s = (i) => {
-      i = i.substring(3).replace(/\W{2,}/, " ").trim();
-      const r = i.split(" "), a = r.shift() ?? "", c = r.join(" ");
-      return { [a]: c };
+    }, r = (t) => {
+      t = t.substring(3).replace(/\W{2,}/, " ").trim();
+      const o = t.split(" "), i = o.shift() ?? "", n = o.join(" ");
+      return { [i]: n };
     };
-    return this.onMessage((i) => {
-      i = i.substring(1);
-      let r = [];
-      if (i.match(/[DE\.]{2}\W(?!=)/)) {
-        i.match(/^D./) && r.push("demuxers"), i.match(/^.E/) && r.push("muxers");
-        for (const a of r)
-          Object.assign(e[a], s(i));
+    return this.onMessage((t) => {
+      t = t.substring(1);
+      let o = [];
+      if (t.match(/[DE\.]{2}\W(?!=)/)) {
+        t.match(/^D./) && o.push("demuxers"), t.match(/^.E/) && o.push("muxers");
+        for (const i of o)
+          Object.assign(e[i], r(t));
       }
     }), await this.exec(["-formats"]), e;
   }
@@ -367,8 +731,8 @@ class O extends E {
   async export() {
     const e = await this.command();
     await this.exec(e);
-    const s = this.readFile(e.at(-1) ?? "");
-    return this.clearMemory(), s;
+    const r = await this.readFile(e.at(-1) ?? "");
+    return this.clearMemory(), r;
   }
   /**
    * Get the meta data of a the specified file.
@@ -376,10 +740,10 @@ class O extends E {
    */
   async meta(e) {
     await this.writeFile("probe", e);
-    const s = {
+    const r = {
       streams: { audio: [], video: [] }
-    }, i = F(s);
-    return this.onMessage(i), await this.exec(["-i", "probe"]), this.removeOnMessage(i), this.clearMemory(), s;
+    }, t = _(r);
+    return this.onMessage(t), await this.exec(["-i", "probe"]), this.removeOnMessage(t), this.clearMemory(), r;
   }
   /**
    * Generate a series of thumbnails
@@ -397,19 +761,19 @@ class O extends E {
    *    document.body.appendChild(img);
    * }
    */
-  async *thumbnails(e, s = 5, i = 0, r) {
-    if (!r) {
-      const { duration: c } = await this.meta(e);
-      c ? r = c : (console.warn(
+  async *thumbnails(e, r = 5, t = 0, o) {
+    if (!o) {
+      const { duration: n } = await this.meta(e);
+      n ? o = n : (console.warn(
         "Could not extract duration from meta data please provide a stop argument. Falling back to 1sec otherwise."
-      ), r = 1);
+      ), o = 1);
     }
-    const a = (r - i) / s;
+    const i = (o - t) / r;
     await this.writeFile("input", e);
-    for (let c = i; c < r; c += a) {
+    for (let n = t; n < o; n += i) {
       await this.exec([
         "-ss",
-        c.toString(),
+        n.toString(),
         "-i",
         "input",
         "-frames:v",
@@ -417,8 +781,8 @@ class O extends E {
         "image.jpg"
       ]);
       try {
-        const n = await this.readFile("image.jpg");
-        yield new Blob([n], { type: "image/jpeg" });
+        const a = await this.readFile("image.jpg"), u = new ArrayBuffer(a.length);
+        new Uint8Array(u).set(a), yield new Blob([u], { type: "image/jpeg" });
       } catch {
       }
     }
@@ -427,58 +791,58 @@ class O extends E {
   parseOutputOptions() {
     if (!this._output)
       throw new Error("Please define the output first");
-    const { format: e, path: s, audio: i, video: r, seek: a, duration: c } = this._output, n = [];
-    let m = `output.${e}`;
-    return s && (m = s + m), a && n.push("-ss", a.toString()), c && n.push("-t", c.toString()), n.push(...this.parseAudioOutput(i)), n.push(...this.parseVideoOutput(r)), n.push(m), n;
+    const { format: e, path: r, audio: t, video: o, seek: i, duration: n } = this._output, a = [];
+    let u = `output.${e}`;
+    return r && (u = r + u), i && a.push("-ss", i.toString()), n && a.push("-t", n.toString()), a.push(...this.parseAudioOutput(t)), a.push(...this.parseVideoOutput(o)), a.push(u), a;
   }
   parseAudioOutput(e) {
     if (!e)
       return [];
     if ("disableAudio" in e)
       return e.disableAudio ? ["-an"] : [];
-    const s = [];
-    return e.codec && s.push("-c:a", e.codec), e.bitrate && s.push("-b:a", e.bitrate.toString()), e.numberOfChannels && s.push("-ac", e.numberOfChannels.toString()), e.volume && s.push("-vol", e.volume.toString()), e.sampleRate && s.push("-ar", e.sampleRate.toString()), s;
+    const r = [];
+    return e.codec && r.push("-c:a", e.codec), e.bitrate && r.push("-b:a", e.bitrate.toString()), e.numberOfChannels && r.push("-ac", e.numberOfChannels.toString()), e.volume && r.push("-vol", e.volume.toString()), e.sampleRate && r.push("-ar", e.sampleRate.toString()), r;
   }
   parseVideoOutput(e) {
     if (!e)
       return [];
     if ("disableVideo" in e)
       return e.disableVideo ? ["-vn"] : [];
-    const s = [];
-    return e.codec && s.push("-c:v", e.codec), e.bitrate && s.push("-b:v", e.bitrate.toString()), e.aspectRatio && s.push("-aspect", e.aspectRatio.toString()), e.framerate && s.push("-r", e.framerate.toString()), e.size && s.push("-s", `${e.size.width}x${e.size.height}`), s;
+    const r = [];
+    return e.codec && r.push("-c:v", e.codec), e.bitrate && r.push("-b:v", e.bitrate.toString()), e.aspectRatio && r.push("-aspect", e.aspectRatio.toString()), e.framerate && r.push("-r", e.framerate.toString()), e.size && r.push("-s", `${e.size.width}x${e.size.height}`), r;
   }
   async parseInputOptions() {
     const e = [];
-    for (const s of this._inputs)
-      e.push(...await this.parseImageInput(s)), e.push(...await this.parseMediaInput(s));
+    for (const r of this._inputs)
+      e.push(...await this.parseImageInput(r)), e.push(...await this.parseMediaInput(r));
     return e;
   }
   async parseImageInput(e) {
     if (!("sequence" in e))
       return [];
-    const s = e.sequence.length.toString().length, i = "image-sequence-";
-    let r = `${i}%0${s}d`;
-    const a = [];
-    for (const [c, n] of e.sequence.entries())
-      if (n instanceof Blob || n.match(/(^http(s?):\/\/|^\/\S)/)) {
-        const m = `${i}${c.toString().padStart(c, "0")}`;
-        await this.writeFile(m, n);
+    const r = e.sequence.length.toString().length, t = "image-sequence-";
+    let o = `${t}%0${r}d`;
+    const i = [];
+    for (const [n, a] of e.sequence.entries())
+      if (a instanceof Blob || a.match(/(^http(s?):\/\/|^\/\S)/)) {
+        const u = `${t}${n.toString().padStart(n, "0")}`;
+        await this.writeFile(u, a);
       } else {
-        const m = n.match(/[0-9]{1,20}/);
-        if (m) {
-          const [u] = m;
-          r = n.replace(/[0-9]{1,20}/, `%0${u.length}d`);
+        const u = a.match(/[0-9]{1,20}/);
+        if (u) {
+          const [c] = u;
+          o = a.replace(/[0-9]{1,20}/, `%0${c.length}d`);
         }
       }
-    return a.push("-framerate", e.framerate.toString()), a.push("-i", r), a;
+    return i.push("-framerate", e.framerate.toString()), i.push("-i", o), i;
   }
   async parseMediaInput(e) {
     if (!("source" in e))
       return [];
-    const { source: s } = e, i = [], r = `input-${(/* @__PURE__ */ new Date()).getTime()}`;
-    return e.seek && i.push("-ss", e.seek.toString()), s instanceof Blob || s.match(/(^http(s?):\/\/|^\/\S)/) ? (await this.writeFile(r, s), i.push("-i", r)) : i.push("-i", s), i;
+    const { source: r } = e, t = [], o = `input-${(/* @__PURE__ */ new Date()).getTime()}`;
+    return e.seek && t.push("-ss", e.seek.toString()), r instanceof Blob || r.match(/(^http(s?):\/\/|^\/\S)/) ? (await this.writeFile(o, r), t.push("-i", o)) : t.push("-i", r), t;
   }
 }
 export {
-  O as FFmpeg
+  F as FFmpeg
 };

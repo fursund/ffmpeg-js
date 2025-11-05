@@ -95,9 +95,9 @@ export type WasmModuleURIs = {
      */
     wasm: string;
     /**
-     * `ffmpeg-core.worker.js` path
+     * `ffmpeg-core.worker.js` path (optional for non-threaded builds)
      */
-    worker: string;
+    worker?: string;
 };
 /**
  * Defines the metadata of an audio stream
