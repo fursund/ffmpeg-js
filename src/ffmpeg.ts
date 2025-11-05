@@ -146,7 +146,7 @@ export class FFmpeg<
       this._inputs = [];
       this._middleware = [];
       this._output = undefined;
-      void this.clearMemory();
+      this.clearMemory();
     }
     this._inputs.push(options);
     return this;
@@ -233,8 +233,8 @@ export class FFmpeg<
   public async export(): Promise<Uint8Array | undefined> {
     const cmd = await this.command();
     await this.exec(cmd);
-    const file = await this.readFile(cmd.at(-1) ?? '');
-    await this.clearMemory();
+    const file = this.readFile(cmd.at(-1) ?? '');
+    this.clearMemory();
     return file;
   }
 
@@ -251,7 +251,7 @@ export class FFmpeg<
     this.onMessage(callback);
     await this.exec(['-i', 'probe']);
     this.removeOnMessage(callback);
-    await this.clearMemory();
+    this.clearMemory();
     return meta;
   }
 
@@ -311,7 +311,7 @@ export class FFmpeg<
         yield new Blob([res], { type: 'image/jpeg' });
       } catch (e) {}
     }
-    await this.clearMemory();
+    this.clearMemory();
   }
 
   private parseOutputOptions(): string[] {

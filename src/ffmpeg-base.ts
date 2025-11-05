@@ -3,7 +3,8 @@ import * as types from './types';
 import * as utils from './utils';
 
 export class FFmpegBase {
-  private _ffmpeg: any; // FFmpeg instance from @ffmpeg/ffmpeg wrapper
+  private _module: any;
+  private _ffmpeg: any;
 
   private _logger = noop;
   private _source: string;
@@ -27,7 +28,7 @@ export class FFmpegBase {
   public constructor({ logger, source }: types.FFmpegBaseSettings) {
     this._source = source;
     this._logger = logger;
-    this.initFFmpeg();
+    this.createFFmpegScript();
   }
 
   /**
@@ -35,15 +36,17 @@ export class FFmpegBase {
    */
   private handleMessage(msg: string) {
     this._logger(msg);
-    // In 0.12, execution completion is handled by the exec() promise, but we still check for errors
-    if (msg.match(/error/i)) {
+    if (msg.match(/(FFMPEG_END|error)/i)) {
       this._whenExecutionDone.forEach((cb) => cb());
     }
-    // Extract frame info from logs for progress compatibility
     if (msg.match(/^frame=/)) {
       this._onProgress.forEach((cb) => cb(utils.parseProgress(msg)));
     }
     this._onMessage.forEach((cb) => cb(msg));
+  }
+
+  private handleScriptLoadError() {
+    this._logger('Failed to load script!');
   }
 
   private async createScriptURIs() {
@@ -54,62 +57,43 @@ export class FFmpegBase {
     };
   }
 
-  /**
-   * Dynamically load @ffmpeg/ffmpeg wrapper from CDN
-   */
-  private async loadFFmpegWrapper(): Promise<any> {
-    // Load the wrapper from unpkg CDN
-    const wrapperUrl = 'https://unpkg.com/@ffmpeg/ffmpeg@0.12.7/dist/esm/ffmpeg.js';
-    
-    // Use dynamic import to load the module
-    const module = await import(/* @vite-ignore */ wrapperUrl);
-    return module.FFmpeg;
+  private handleLocateFile(path: string, prefix: string) {
+    if (path.endsWith('ffmpeg-core.wasm')) {
+      return this._uris?.wasm;
+    }
+    if (path.endsWith('ffmpeg-core.worker.js')) {
+      return this._uris?.worker;
+    }
+    return prefix + path;
   }
 
-  private async initFFmpeg() {
-    try {
-      // Load the FFmpeg wrapper class dynamically
-      const FFmpegClass = await this.loadFFmpegWrapper();
-      
-      // Create new instance (0.12 API: new FFmpeg() instead of createFFmpeg())
-      this._ffmpeg = new FFmpegClass();
-      
-      // Setup event handlers (0.12 API: .on() instead of setLogger/setProgress)
-      this._ffmpeg.on('log', (e: any) => {
-        const msg = typeof e === 'string' ? e : e?.message ?? '';
-        if (msg) this.handleMessage(msg);
-      });
-      
-      this._ffmpeg.on('progress', (e: any) => {
-        // Progress can be a number (0-1) or an object with progress/ratio
-        const progressVal = typeof e === 'number' ? e : e?.progress ?? e?.ratio ?? 0;
-        if (typeof progressVal === 'number') {
-          this._onProgress.forEach((cb) => {
-            if (typeof cb === 'function') {
-              // In 0.12, progress is a ratio (0-1), but we also parse frame info from logs for compatibility
-              cb(progressVal);
-            }
-          });
-        }
-      });
+  private async handleScriptLoad() {
+    //@ts-ignore
+    const core: any = await createFFmpegCore({
+      mainScriptUrlOrBlob: this._uris?.core,
+      printErr: this.handleMessage.bind(this),
+      print: this.handleMessage.bind(this),
+      locateFile: this.handleLocateFile.bind(this),
+    });
 
-      // Get URIs for core files
-      this._uris = await this.createScriptURIs();
+    this._logger('CREATED FFMPEG WASM:', core);
+    this.isReady = true;
+    this._module = core;
+    this._ffmpeg = this._module.cwrap('proxy_main', 'number', [
+      'number',
+      'number',
+    ]);
+    this._whenReady.forEach((cb) => cb());
+  }
 
-      // Load FFmpeg (0.12 API: load options are passed here, not to constructor)
-      await this._ffmpeg.load({
-        coreURL: this._uris.core,
-        wasmURL: this._uris.wasm,
-        workerURL: this._uris.worker,
-      });
-
-      this._logger('CREATED FFMPEG WASM: loaded');
-      this.isReady = true;
-      this._whenReady.forEach((cb) => cb());
-    } catch (error) {
-      this._logger('Failed to load FFmpeg:', error);
-      throw error;
-    }
+  private async createFFmpegScript() {
+    const script = document.createElement('script');
+    this._uris = await this.createScriptURIs();
+    script.src = this._uris.core;
+    script.type = 'text/javascript';
+    script.addEventListener('load', this.handleScriptLoad.bind(this));
+    script.addEventListener('error', this.handleScriptLoadError.bind(this));
+    document.head.appendChild(script);
   }
 
   /**
@@ -163,11 +147,13 @@ export class FFmpegBase {
 
   /**
    * Use this message to execute ffmpeg commands
-   * 0.12 API: exec() instead of run()
    */
   public async exec(args: string[]): Promise<void> {
-    // 0.12 API: exec takes an array of arguments
-    await this._ffmpeg.exec(['-nostdin', '-y', ...args]);
+    this._ffmpeg(...this.parseArgs(['./ffmpeg', '-nostdin', '-y', ...args]));
+
+    await new Promise<void>((resolve) => {
+      this.whenExecutionDone(resolve);
+    });
 
     // add file that has been created to memory
     if (args.at(-1)?.match(/\S\.[A-Za-z0-9_-]{1,20}/)) {
@@ -176,23 +162,42 @@ export class FFmpegBase {
   }
 
   /**
-   * Read a file that is stored in the memfs
-   * 0.12 API: await readFile() instead of FS.readFile()
+   * This method allocates memory required
+   * to execute the command
    */
-  public async readFile(path: string): Promise<Uint8Array> {
+  private parseArgs(args: string[]) {
+    const argsPtr = this._module._malloc(
+      args.length * Uint32Array.BYTES_PER_ELEMENT
+    );
+
+    args.forEach((s, idx) => {
+      const sz = this._module.lengthBytesUTF8(s) + 1;
+      const buf = this._module._malloc(sz);
+      this._module.stringToUTF8(s, buf, sz);
+      this._module.setValue(
+        argsPtr + Uint32Array.BYTES_PER_ELEMENT * idx,
+        buf,
+        'i32'
+      );
+    });
+    return [args.length, argsPtr];
+  }
+
+  /**
+   * Read a file that is stored in the memfs
+   */
+  public readFile(path: string): Uint8Array {
     this._logger('READING FILE:', path);
-    const data = await this._ffmpeg.readFile(path);
-    return data as Uint8Array;
+    return this._module.FS.readFile(path);
   }
 
   /**
    * Delete a file that is stored in the memfs
-   * 0.12 API: await deleteFile() instead of FS.unlink()
    */
-  public async deleteFile(path: string): Promise<void> {
+  public deleteFile(path: string): void {
     try {
       this._logger('DELETING FILE:', path);
-      await this._ffmpeg.deleteFile(path);
+      this._module.FS.unlink(path);
     } catch (e) {
       this._logger('Could not delete file');
     }
@@ -203,32 +208,22 @@ export class FFmpegBase {
    * is the file name to use. The second argument
    * needs to contain an url to the file or the file
    * as a blob
-   * 0.12 API: await writeFile() instead of FS.writeFile()
    */
   public async writeFile(path: string, file: string | Blob): Promise<void> {
     const data: Uint8Array = await toUint8Array(file);
-    this._logger('WRITING FILE:', path);
-    await this._ffmpeg.writeFile(path, data);
-    this._memory.push(path);
-  }
 
-  /**
-   * Terminate FFmpeg instance
-   * 0.12 API: terminate() instead of exit()
-   */
-  public terminate(): void {
-    if (this._ffmpeg && typeof this._ffmpeg.terminate === 'function') {
-      this._ffmpeg.terminate();
-    }
+    this._logger('WRITING FILE:', path);
+    this._module.FS.writeFile(path, data);
+    this._memory.push(path);
   }
 
   /**
    * Call this method to delete all files that
    * have been written to the memfs memory
    */
-  public async clearMemory(): Promise<void> {
+  public clearMemory(): void {
     for (const path of [...new Set(this._memory)]) {
-      await this.deleteFile(path);
+      this.deleteFile(path);
     }
     this._memory = [];
   }
