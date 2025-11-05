@@ -26,8 +26,12 @@ export const toBlobURL = async (url: string) => {
     wasm: 'application/wasm',
   };
   const buffer = await (await fetch(url)).arrayBuffer();
+  // Determine MIME type - handle .worker.js files
+  const extension = url.includes('.worker.js') 
+    ? 'js' 
+    : url.split('.')?.at(-1) ?? 'js';
   const blob = new Blob([buffer], {
-    type: mimeTypes[url.split('.')?.at(-1) ?? 'js'],
+    type: mimeTypes[extension] || 'application/javascript',
   });
   return URL.createObjectURL(blob);
 };

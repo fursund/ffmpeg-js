@@ -30,6 +30,22 @@ export default defineConfig(({ command }) => {
       headers: {
         'Cross-Origin-Embedder-Policy': 'require-corp',
         'Cross-Origin-Opener-Policy': 'same-origin',
+        // Required for static assets (WASM, worker files) when using COEP
+        'Cross-Origin-Resource-Policy': 'cross-origin',
+      },
+      // Ensure headers are applied to all routes, including static files
+      middlewareMode: false,
+      fs: {
+        // Allow serving files from project root
+        strict: false,
+      },
+    },
+    // Also set headers for preview server
+    preview: {
+      headers: {
+        'Cross-Origin-Embedder-Policy': 'require-corp',
+        'Cross-Origin-Opener-Policy': 'same-origin',
+        'Cross-Origin-Resource-Policy': 'cross-origin',
       },
     },
   }

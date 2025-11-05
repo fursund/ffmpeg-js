@@ -233,7 +233,7 @@ export class FFmpeg<
   public async export(): Promise<Uint8Array | undefined> {
     const cmd = await this.command();
     await this.exec(cmd);
-    const file = this.readFile(cmd.at(-1) ?? '');
+    const file = await this.readFile(cmd.at(-1) ?? '');
     this.clearMemory();
     return file;
   }
@@ -308,7 +308,10 @@ export class FFmpeg<
       ]);
       try {
         const res = await this.readFile('image.jpg');
-        yield new Blob([res], { type: 'image/jpeg' });
+        // Create a new ArrayBuffer to avoid SharedArrayBuffer type issues
+        const buffer = new ArrayBuffer(res.length);
+        new Uint8Array(buffer).set(res);
+        yield new Blob([buffer], { type: 'image/jpeg' });
       } catch (e) {}
     }
     this.clearMemory();

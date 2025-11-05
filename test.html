@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FFmpeg Test Page</title>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        padding: 20px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+
+      .container {
+        background: white;
+        border-radius: 16px;
+        padding: 32px;
+        max-width: 800px;
+        width: 100%;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      }
+
+      h1 {
+        color: #333;
+        margin-bottom: 8px;
+        font-size: 28px;
+      }
+
+      .subtitle {
+        color: #666;
+        margin-bottom: 32px;
+        font-size: 14px;
+      }
+
+      .status {
+        padding: 12px;
+        border-radius: 8px;
+        margin-bottom: 24px;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .status.loading {
+        background: #e3f2fd;
+        color: #1976d2;
+      }
+
+      .status.ready {
+        background: #e8f5e9;
+        color: #2e7d32;
+      }
+
+      .status.error {
+        background: #ffebee;
+        color: #c62828;
+      }
+
+      .status-indicator {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        display: inline-block;
+      }
+
+      .status.loading .status-indicator {
+        background: #1976d2;
+        animation: pulse 1.5s ease-in-out infinite;
+      }
+
+      .status.ready .status-indicator {
+        background: #2e7d32;
+      }
+
+      .status.error .status-indicator {
+        background: #c62828;
+      }
+
+      @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+      }
+
+      .form-group {
+        margin-bottom: 24px;
+      }
+
+      label {
+        display: block;
+        margin-bottom: 8px;
+        color: #333;
+        font-weight: 500;
+        font-size: 14px;
+      }
+
+      input[type="file"] {
+        width: 100%;
+        padding: 12px;
+        border: 2px dashed #ddd;
+        border-radius: 8px;
+        background: #f9f9f9;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+
+      input[type="file"]:hover {
+        border-color: #667eea;
+        background: #f0f0ff;
+      }
+
+      textarea {
+        width: 100%;
+        padding: 12px;
+        border: 2px solid #ddd;
+        border-radius: 8px;
+        font-family: 'Monaco', 'Courier New', monospace;
+        font-size: 13px;
+        resize: vertical;
+        min-height: 80px;
+      }
+
+      textarea:focus {
+        outline: none;
+        border-color: #667eea;
+      }
+
+      .command-examples {
+        margin-top: 8px;
+        font-size: 12px;
+        color: #666;
+      }
+
+      .command-examples code {
+        background: #f5f5f5;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 11px;
+      }
+
+      button {
+        width: 100%;
+        padding: 14px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: transform 0.2s, box-shadow 0.2s;
+      }
+
+      button:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+      }
+
+      button:active:not(:disabled) {
+        transform: translateY(0);
+      }
+
+      button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+
+      .output {
+        margin-top: 32px;
+        padding: 24px;
+        background: #f9f9f9;
+        border-radius: 8px;
+        display: none;
+      }
+
+      .output.show {
+        display: block;
+      }
+
+      .output h3 {
+        color: #333;
+        margin-bottom: 16px;
+        font-size: 18px;
+      }
+
+      .output-info {
+        margin-bottom: 16px;
+        color: #666;
+        font-size: 14px;
+      }
+
+      .download-btn {
+        display: inline-block;
+        padding: 10px 20px;
+        background: #4caf50;
+        color: white;
+        text-decoration: none;
+        border-radius: 6px;
+        margin-top: 8px;
+        transition: background 0.2s;
+      }
+
+      .download-btn:hover {
+        background: #45a049;
+      }
+
+      .logs {
+        margin-top: 24px;
+        padding: 16px;
+        background: #1e1e1e;
+        color: #d4d4d4;
+        border-radius: 8px;
+        font-family: 'Monaco', 'Courier New', monospace;
+        font-size: 12px;
+        max-height: 200px;
+        overflow-y: auto;
+      }
+
+      .logs .log-entry {
+        margin-bottom: 4px;
+        padding: 4px 0;
+      }
+
+      .logs .log-entry.error {
+        color: #f48771;
+      }
+
+      .logs .log-entry.success {
+        color: #4ec9b0;
+      }
+
+      .spinner {
+        display: inline-block;
+        width: 16px;
+        height: 16px;
+        border: 2px solid #ffffff;
+        border-top-color: transparent;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        margin-right: 8px;
+      }
+
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>🎬 FFmpeg Test Page</h1>
+      <p class="subtitle">Test FFmpeg.wasm 0.12 with file input and custom commands</p>
+
+      <div id="status" class="status loading">
+        <span class="status-indicator"></span>
+        <span>Loading FFmpeg...</span>
+      </div>
+
+      <form id="ffmpeg-form">
+        <div class="form-group">
+          <label for="file-input">Input File</label>
+          <input type="file" id="file-input" accept="video/*,audio/*,image/*" />
+        </div>
+
+        <div class="form-group">
+          <label for="command-input">FFmpeg Command</label>
+          <textarea 
+            id="command-input" 
+            placeholder='-i input.mp4 output.mp4'
+            required
+          >-i input.mov -c copy output.mp4</textarea>
+          <div class="command-examples">
+            Examples: 
+            <code>-i input.ogg -f wav output.wav</code> (uses threading) | 
+            <code>-i input.mov -c copy output.mp4</code> (no re-encoding, faster) |
+            <code>-i input.mp4 -ss 00:00:05 -t 10 output.mp4</code>
+          </div>
+        </div>
+
+        <button type="submit" id="process-btn" disabled>
+          Process File
+        </button>
+      </form>
+
+      <div id="progress-container" style="display: none; margin-top: 24px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <span style="font-size: 14px; color: #666;">Processing...</span>
+          <span id="progress-text" style="font-size: 14px; color: #666; font-weight: 600;">0%</span>
+        </div>
+        <div style="width: 100%; height: 8px; background: #e0e0e0; border-radius: 4px; overflow: hidden;">
+          <div id="progress-bar" style="height: 100%; background: linear-gradient(90deg, #667eea 0%, #764ba2 100%); width: 0%; transition: width 0.3s ease;"></div>
+        </div>
+        <div id="progress-details" style="margin-top: 8px; font-size: 12px; color: #999;"></div>
+      </div>
+
+      <div id="output" class="output">
+        <h3>Output File</h3>
+        <div class="output-info" id="output-info"></div>
+        <div id="output-preview" style="margin-top: 16px;"></div>
+        <a id="download-link" class="download-btn" download>Download Result</a>
+      </div>
+
+      <div class="logs" id="logs"></div>
+    </div>
+
+    <script type="module">
+      import { FFmpeg } from './src/index.ts';
+
+      // Check environment support
+      function checkEnvironment() {
+        const checks = {
+          sharedArrayBuffer: typeof SharedArrayBuffer !== 'undefined',
+          crossOriginIsolated: window.crossOriginIsolated,
+        };
+
+        log(`Environment check:`, 'info');
+        log(`  SharedArrayBuffer: ${checks.sharedArrayBuffer ? '✅' : '❌'}`, checks.sharedArrayBuffer ? 'success' : 'error');
+        log(`  Cross-Origin Isolated: ${checks.crossOriginIsolated ? '✅' : '❌'}`, checks.crossOriginIsolated ? 'success' : 'error');
+
+        // Check headers
+        fetch('/').then(r => {
+          const coop = r.headers.get('Cross-Origin-Opener-Policy');
+          const coep = r.headers.get('Cross-Origin-Embedder-Policy');
+          log(`  COOP header: ${coop || '❌ Missing'}`, coop ? 'success' : 'error');
+          log(`  COEP header: ${coep || '❌ Missing'}`, coep ? 'success' : 'error');
+          
+          if (!coop || !coep) {
+            updateStatus('error', 'Headers missing! Restart dev server and ensure you access via localhost:5173');
+          }
+        });
+
+        if (!checks.sharedArrayBuffer || !checks.crossOriginIsolated) {
+          updateStatus('error', 'Threading not supported. Check headers and use Chrome/Edge via localhost:5173');
+          return false;
+        }
+        return true;
+      }
+
+      const statusEl = document.getElementById('status');
+      const form = document.getElementById('ffmpeg-form');
+      const fileInput = document.getElementById('file-input');
+      const commandInput = document.getElementById('command-input');
+      const processBtn = document.getElementById('process-btn');
+      const outputEl = document.getElementById('output');
+      const outputInfo = document.getElementById('output-info');
+      const downloadLink = document.getElementById('download-link');
+      const logsEl = document.getElementById('logs');
+      const progressContainer = document.getElementById('progress-container');
+      const progressBar = document.getElementById('progress-bar');
+      const progressText = document.getElementById('progress-text');
+      const progressDetails = document.getElementById('progress-details');
+      
+      let totalFrames = 0;
+      let currentFrame = 0;
+      let isExecuting = false;
+      let hasCompleted = false;
+      let currentArgs = null;
+      let currentStartTime = null;
+
+      function log(message, type = 'info') {
+        const entry = document.createElement('div');
+        entry.className = `log-entry ${type}`;
+        entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+        logsEl.appendChild(entry);
+        logsEl.scrollTop = logsEl.scrollHeight;
+      }
+
+      function updateStatus(status, message) {
+        statusEl.className = `status ${status}`;
+        statusEl.innerHTML = `<span class="status-indicator"></span><span>${message}</span>`;
+      }
+
+      // Check environment first
+      const envOk = checkEnvironment();
+      if (!envOk) {
+        processBtn.disabled = true;
+      }
+
+      // Initialize FFmpeg
+      const ffmpeg = new FFmpeg({ log: true });
+      window.ffmpeg = ffmpeg;
+
+      // Wait for FFmpeg to be ready
+      ffmpeg.whenReady(() => {
+        updateStatus('ready', 'FFmpeg is ready!');
+        processBtn.disabled = false;
+        log('FFmpeg initialized and ready', 'success');
+      });
+
+      ffmpeg.onMessage((msg) => {
+        // Log FFmpeg output to test page
+        if (msg.trim()) {
+          log(msg.trim());
+          
+          // Try to extract total frames from FFmpeg output
+          // Look for patterns like "Duration: 00:00:54.72" or frame count info
+          const durationMatch = msg.match(/Duration:\s+(\d{2}):(\d{2}):(\d{2})\.(\d{2})/);
+          if (durationMatch) {
+            const hours = parseInt(durationMatch[1]);
+            const minutes = parseInt(durationMatch[2]);
+            const seconds = parseInt(durationMatch[3]);
+            const ms = parseInt(durationMatch[4]);
+            const totalSeconds = hours * 3600 + minutes * 60 + seconds + ms / 100;
+            
+            // Try to estimate frames (assuming ~30fps if not specified)
+            // We'll update this when we see actual frame rate info
+            const fpsMatch = msg.match(/fps=(\d+\.?\d*)/);
+            const fps = fpsMatch ? parseFloat(fpsMatch[1]) : 30;
+            if (totalFrames === 0 || totalFrames < currentFrame) {
+              totalFrames = Math.ceil(totalSeconds * fps);
+              updateProgress();
+            }
+          }
+          
+          // Look for frame rate info: "30 fps" or "fps=30"
+          const fpsInfoMatch = msg.match(/(\d+\.?\d*)\s*fps/);
+          if (fpsInfoMatch && totalFrames === 0) {
+            const fps = parseFloat(fpsInfoMatch[1]);
+            // Try to get duration from previous logs or estimate
+            if (currentFrame > 0) {
+              // Estimate based on current frame and fps
+              const estimatedDuration = currentFrame / fps;
+              totalFrames = Math.ceil(estimatedDuration * fps * 1.2); // Add 20% buffer
+              updateProgress();
+            }
+          }
+          
+          // Extract frame count from progress lines (frame= XXXX)
+          const frameMatch = msg.match(/frame=\s*(\d+)/);
+          if (frameMatch) {
+            const frameNum = parseInt(frameMatch[1]);
+            // If this is higher than our current estimate, update it
+            if (frameNum > totalFrames) {
+              totalFrames = Math.ceil(frameNum * 1.05); // Add 5% buffer
+              // Update progress if we have a current frame
+              if (currentFrame > 0) {
+                updateProgress();
+              }
+            }
+          }
+        }
+      });
+
+      // Helper function to find output filename from args
+      function findOutputFileName(args) {
+        for (let i = args.length - 1; i >= 0; i--) {
+          const arg = args[i];
+          if (arg.match(/\.\w+$/) && !arg.startsWith('-')) {
+            return arg;
+          }
+        }
+        return null;
+      }
+      
+      // Helper function to complete the operation (read file and display)
+      async function completeOperation(args, startTime) {
+        // Prevent double-completion
+        if (hasCompleted) {
+          return;
+        }
+        hasCompleted = true;
+        isExecuting = false;
+        
+        const endTime = performance.now();
+        
+        // Hide progress container immediately
+        if (progressContainer) {
+          progressContainer.style.display = 'none';
+          progressContainer.style.visibility = 'hidden';
+          progressContainer.setAttribute('hidden', '');
+        }
+        
+        log(`Command completed in ${((endTime - startTime) / 1000).toFixed(2)}s`, 'success');
+        
+        // Find output file
+        const outputFileName = findOutputFileName(args);
+        if (!outputFileName) {
+          throw new Error('Could not determine output filename from command');
+        }
+        
+        // Read output file
+        log(`Reading output file: ${outputFileName}...`);
+        const outputData = await ffmpeg.readFile(outputFileName);
+        log(`Output file read: ${outputFileName} (${(outputData.length / 1024 / 1024).toFixed(2)} MB)`, 'success');
+        
+        // Create download link
+        let blobData = outputData;
+        if (outputData.buffer instanceof SharedArrayBuffer) {
+          const buffer = new ArrayBuffer(outputData.length);
+          new Uint8Array(buffer).set(outputData);
+          blobData = new Uint8Array(buffer);
+        }
+        
+        const mimeType = getMimeType(outputFileName);
+        const blob = new Blob([blobData], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        
+        downloadLink.href = url;
+        downloadLink.download = outputFileName;
+        downloadLink.textContent = `Download ${outputFileName}`;
+        
+        outputInfo.innerHTML = `
+          <strong>File:</strong> ${outputFileName}<br>
+          <strong>Size:</strong> ${(outputData.length / 1024 / 1024).toFixed(2)} MB<br>
+          <strong>Processing time:</strong> ${((endTime - startTime) / 1000).toFixed(2)}s
+        `;
+        
+        // Show preview for videos and images
+        const outputPreview = document.getElementById('output-preview');
+        outputPreview.innerHTML = '';
+        
+        if (mimeType.startsWith('video/')) {
+          const video = document.createElement('video');
+          video.src = url;
+          video.controls = true;
+          video.style.width = '100%';
+          video.style.maxWidth = '600px';
+          video.style.borderRadius = '8px';
+          video.style.marginTop = '12px';
+          outputPreview.appendChild(video);
+          log('Video preview available', 'success');
+        } else if (mimeType.startsWith('image/')) {
+          const img = document.createElement('img');
+          img.src = url;
+          img.style.width = '100%';
+          img.style.maxWidth = '600px';
+          img.style.borderRadius = '8px';
+          img.style.marginTop = '12px';
+          outputPreview.appendChild(img);
+          log('Image preview available', 'success');
+        } else if (mimeType.startsWith('audio/')) {
+          const audio = document.createElement('audio');
+          audio.src = url;
+          audio.controls = true;
+          audio.style.width = '100%';
+          audio.style.marginTop = '12px';
+          outputPreview.appendChild(audio);
+          log('Audio preview available', 'success');
+        }
+        
+        outputEl.classList.add('show');
+        log('Processing complete!', 'success');
+        
+        // Cleanup
+        ffmpeg.clearMemory();
+        
+        // Re-enable button
+        processBtn.disabled = false;
+        processBtn.textContent = 'Process File';
+      }
+      
+      // Track progress
+      // In 0.12+, progress is a percentage (0-1), but we also parse frame numbers from messages
+      ffmpeg.onProgress((progress) => {
+        // Don't update progress if execution has completed
+        if (!isExecuting || hasCompleted) {
+          return;
+        }
+        
+        // Ensure progress container is visible
+        if (!progressContainer) {
+          return;
+        }
+        // Only make container visible if execution is still in progress
+        if (isExecuting && (progressContainer.style.display === 'none' || !progressContainer.style.display)) {
+          progressContainer.style.display = 'block';
+        }
+        
+        // Check if progress is a percentage (0-1) or frame number
+        if (typeof progress === 'number' && progress >= 0 && progress <= 1) {
+          // It's a percentage from 0.12 core progress callback
+          const percent = Math.round(progress * 100);
+          
+          // If we reach 100%, automatically complete the operation
+          if (percent >= 100 && currentArgs && currentStartTime) {
+            completeOperation(currentArgs, currentStartTime).catch(error => {
+              log(`Error completing operation: ${error.message}`, 'error');
+              isExecuting = false;
+              hasCompleted = true;
+              processBtn.disabled = false;
+              processBtn.textContent = 'Process File';
+            });
+            return;
+          }
+          
+          // Update UI using requestAnimationFrame for consistency
+          requestAnimationFrame(() => {
+            if (!isExecuting || hasCompleted) {
+              return;
+            }
+            progressBar.style.width = percent + '%';
+            progressText.textContent = percent + '%';
+            progressDetails.textContent = `${percent}% complete`;
+          });
+          log(`Progress: ${percent}%`, 'info');
+        } else if (typeof progress === 'number' && progress > 1) {
+          // It's a frame number (legacy or from message parsing)
+          currentFrame = progress;
+          
+          // Update total frames if we see a higher frame count than estimated
+          if (progress > totalFrames && totalFrames > 0) {
+            totalFrames = Math.ceil(progress * 1.1); // Add 10% buffer
+          }
+          
+          // Always update the UI via updateProgress() for frame-based progress
+          updateProgress();
+          log(`Progress: Frame ${progress}`, 'info');
+        } else if (progress && typeof progress === 'object' && typeof progress.progress === 'number') {
+          // Progress object with progress property
+          const progValue = progress.progress;
+          if (progValue >= 0 && progValue <= 1) {
+            const percent = Math.round(progValue * 100);
+            
+            // If we reach 100%, automatically complete the operation
+            if (percent >= 100 && currentArgs && currentStartTime) {
+              completeOperation(currentArgs, currentStartTime).catch(error => {
+                log(`Error completing operation: ${error.message}`, 'error');
+                isExecuting = false;
+                hasCompleted = true;
+                processBtn.disabled = false;
+                processBtn.textContent = 'Process File';
+              });
+              return;
+            }
+            
+            // Update UI using requestAnimationFrame for consistency
+            requestAnimationFrame(() => {
+              if (!isExecuting || hasCompleted) {
+                return;
+              }
+              progressBar.style.width = percent + '%';
+              progressText.textContent = percent + '%';
+              progressDetails.textContent = `${percent}% complete`;
+            });
+            log(`Progress: ${percent}%`, 'info');
+          }
+        }
+      });
+      
+      function updateProgress() {
+        // Verify elements exist
+        if (!progressBar || !progressText || !progressDetails) {
+          return;
+        }
+        
+        // Don't update if execution has completed
+        if (!isExecuting || hasCompleted) {
+          return;
+        }
+        
+        let percent = 0;
+        let text = '0%';
+        let details = 'Starting...';
+        
+        if (totalFrames > 0 && currentFrame > 0) {
+          // We have both frame count and total - show percentage
+          percent = Math.min(100, Math.round((currentFrame / totalFrames) * 100));
+          text = percent + '%';
+          details = `Frame ${currentFrame} of ~${totalFrames}`;
+        } else if (currentFrame > 0) {
+          // Unknown total frames - show animated progress with frame count
+          percent = Math.min(95, Math.floor(currentFrame / 10));
+          text = 'Processing...';
+          details = `Frame ${currentFrame} (total unknown)`;
+        } else {
+          // Starting
+          percent = 0;
+          text = '0%';
+          details = 'Starting...';
+        }
+        
+        // Update UI elements
+        requestAnimationFrame(() => {
+          if (!isExecuting || hasCompleted) {
+            return;
+          }
+          
+          progressBar.style.width = percent + '%';
+          progressText.textContent = text;
+          progressDetails.textContent = details;
+        });
+      }
+
+      // Handle form submission
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const file = fileInput.files[0];
+        if (!file) {
+          alert('Please select a file');
+          return;
+        }
+
+        const command = commandInput.value.trim();
+        if (!command) {
+          alert('Please enter a command');
+          return;
+        }
+
+        try {
+          // Reset UI
+          outputEl.classList.remove('show');
+          progressContainer.style.display = 'none';
+          processBtn.disabled = true;
+          processBtn.innerHTML = '<span class="spinner"></span>Processing...';
+          logsEl.innerHTML = '';
+          
+          // Reset progress
+          totalFrames = 0;
+          currentFrame = 0;
+          isExecuting = false;
+          hasCompleted = false;
+          currentArgs = null;
+          currentStartTime = null;
+          progressBar.style.width = '0%';
+          progressText.textContent = '0%';
+          progressDetails.textContent = '';
+
+          log('Starting processing...', 'success');
+          log(`Input file: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`);
+          log(`Command: ${command}`);
+
+          // Write input file
+          const inputFileName = 'input' + (file.name.match(/\.\w+$/) || [''])[0];
+          await ffmpeg.writeFile(inputFileName, file);
+          log(`File written: ${inputFileName}`);
+
+          // Parse command
+          const parts = command.split(/\s+/);
+          const args = parts.map(part => {
+            // Replace placeholder input filename with actual
+            if (part === 'input.mp4' || part === 'input.ogg' || part === 'input.*') {
+              return inputFileName;
+            }
+            return part;
+          });
+
+          // Execute command
+          log('Executing FFmpeg command...');
+          
+          // Show progress container and reset progress
+          progressContainer.style.display = 'block';
+          progressBar.style.width = '0%';
+          progressText.textContent = '0%';
+          progressDetails.textContent = 'Starting...';
+          totalFrames = 0;
+          currentFrame = 0;
+          isExecuting = true;
+          hasCompleted = false;
+          currentArgs = args;
+          currentStartTime = performance.now();
+          
+          // Execute command - completion will be handled by progress callback at 100%
+          // or by the catch block if there's an error
+          await ffmpeg.exec(args);
+          
+          // If we get here and haven't completed yet (progress callback didn't fire at 100%),
+          // complete the operation now
+          if (!hasCompleted) {
+            await completeOperation(args, currentStartTime);
+          }
+        } catch (error) {
+          log(`Error: ${error.message}`, 'error');
+          updateStatus('error', `Error: ${error.message}`);
+          alert(`Error: ${error.message}`);
+          
+          // Reset state on error
+          isExecuting = false;
+          hasCompleted = false;
+          currentArgs = null;
+          currentStartTime = null;
+          
+          // Hide progress container
+          if (progressContainer) {
+            progressContainer.style.display = 'none';
+          }
+        } finally {
+          // Only re-enable button if we haven't already completed (completeOperation handles it)
+          if (!hasCompleted) {
+            processBtn.disabled = false;
+            processBtn.textContent = 'Process File';
+          }
+        }
+      });
+
+      function getMimeType(filename) {
+        const ext = filename.split('.').pop().toLowerCase();
+        const mimeTypes = {
+          'mp4': 'video/mp4',
+          'webm': 'video/webm',
+          'ogg': 'audio/ogg',
+          'wav': 'audio/wav',
+          'mp3': 'audio/mpeg',
+          'gif': 'image/gif',
+          'jpg': 'image/jpeg',
+          'jpeg': 'image/jpeg',
+          'png': 'image/png',
+        };
+        return mimeTypes[ext] || 'application/octet-stream';
+      }
+    </script>
+  </body>
+</html>
