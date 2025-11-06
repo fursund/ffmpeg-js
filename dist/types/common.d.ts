@@ -17,6 +17,7 @@ export type MessageCallback = (msg: string) => void;
 export type ProgressCallback = (progress: number | {
     progress: number;
     size?: number;
+    frame?: number;
 }) => void;
 /**
  * Defines encoder and decoder records that

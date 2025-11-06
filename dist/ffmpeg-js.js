@@ -4,7 +4,7 @@ var u = (l, r, e) => (y(l, typeof r != "symbol" ? r + "" : r, e), e);
 const b = async (l) => {
   let r;
   return typeof l == "string" ? r = await (await fetch(l)).arrayBuffer() : r = await await l.arrayBuffer(), new Uint8Array(r);
-}, f = async (l) => {
+}, h = async (l) => {
   var s;
   const r = {
     js: "application/javascript",
@@ -39,21 +39,21 @@ const b = async (l) => {
     };
     if (r.match(/Video/)) {
       const g = d;
-      for (const h of p)
-        h.match(/Video:/) && Object.assign(g, {
-          codec: (i = (s = (o = h.match(/Video:\W*[a-z0-9_-]*\W/i)) == null ? void 0 : o.at(0)) == null ? void 0 : s.replace(/Video:/, "")) == null ? void 0 : i.trim()
-        }), h.match(/[0-9]*x[0-9]*/) && (Object.assign(g, { width: parseFloat(h.split("x")[0]) }), Object.assign(g, { height: parseFloat(h.split("x")[1]) })), h.match(/fps/) && Object.assign(g, {
-          fps: parseFloat(h.replace("fps", "").trim())
+      for (const f of p)
+        f.match(/Video:/) && Object.assign(g, {
+          codec: (i = (s = (o = f.match(/Video:\W*[a-z0-9_-]*\W/i)) == null ? void 0 : o.at(0)) == null ? void 0 : s.replace(/Video:/, "")) == null ? void 0 : i.trim()
+        }), f.match(/[0-9]*x[0-9]*/) && (Object.assign(g, { width: parseFloat(f.split("x")[0]) }), Object.assign(g, { height: parseFloat(f.split("x")[1]) })), f.match(/fps/) && Object.assign(g, {
+          fps: parseFloat(f.replace("fps", "").trim())
         });
       l.streams.video.push(g);
     }
     if (r.match(/Audio/)) {
       const g = d;
-      for (const h of p)
-        h.match(/Audio:/) && Object.assign(g, {
-          codec: (c = (n = (a = h.match(/Audio:\W*[a-z0-9_-]*\W/i)) == null ? void 0 : a.at(0)) == null ? void 0 : n.replace(/Audio:/, "")) == null ? void 0 : c.trim()
-        }), h.match(/hz/i) && Object.assign(g, {
-          sampleRate: parseInt(h.replace(/[\D]/gm, ""))
+      for (const f of p)
+        f.match(/Audio:/) && Object.assign(g, {
+          codec: (c = (n = (a = f.match(/Audio:\W*[a-z0-9_-]*\W/i)) == null ? void 0 : a.at(0)) == null ? void 0 : n.replace(/Audio:/, "")) == null ? void 0 : c.trim()
+        }), f.match(/hz/i) && Object.assign(g, {
+          sampleRate: parseInt(f.replace(/[\D]/gm, ""))
         });
       l.streams.audio.push(g);
     }
@@ -202,6 +202,7 @@ const b = async (l) => {
             let progressReached100 = false;
             let knownDurationSec = null;
             let lastSize = 0; // Track last size to accumulate
+            let lastFrame = 0; // Track last frame number
             const originalLogger = core.logger;
             const originalProgress = core.progress;
             
@@ -239,9 +240,9 @@ const b = async (l) => {
                 }
               }
               
-              // Parse progress from log messages using out_time_ms and total_size
+              // Parse progress from log messages using out_time_ms, total_size, and frame
               // -progress pipe:1 outputs key=value pairs, one per line
-              // Format: "out_time_ms=4914000" and "total_size=48"
+              // Format: "out_time_ms=4914000", "total_size=48", and "frame=78"
               if (knownDurationSec !== null && knownDurationSec > 0) {
                 // Parse out_time_ms
                 const timeMsRegex = new RegExp('out_time_ms\\\\s*=\\\\s*(\\\\d+)', 'i');
@@ -250,6 +251,10 @@ const b = async (l) => {
                 // Parse total_size (in bytes)
                 const sizeRegex = new RegExp('total_size\\\\s*=\\\\s*(\\\\d+)', 'i');
                 const sizeMatch = message.match(sizeRegex);
+                
+                // Parse frame number
+                const frameRegex = new RegExp('frame\\\\s*=\\\\s*(\\\\d+)', 'i');
+                const frameMatch = message.match(frameRegex);
                 
                 if (timeMsMatch) {
                   // out_time_ms is in microseconds, not milliseconds! Divide by 1,000,000
@@ -267,15 +272,24 @@ const b = async (l) => {
                       size = lastSize; // Use last known size if not in this message
                     }
                     
-                    // Send progress with size information
-                    const progressPayload = size !== null 
-                      ? { progress: ratio, size: size }
+                    // Get frame if available
+                    let frame = null;
+                    if (frameMatch) {
+                      frame = parseInt(frameMatch[1], 10);
+                      lastFrame = frame; // Update last known frame
+                    } else if (lastFrame > 0) {
+                      frame = lastFrame; // Use last known frame if not in this message
+                    }
+                    
+                    // Send progress with size and frame information
+                    const progressPayload = (size !== null || frame !== null)
+                      ? { progress: ratio, ...(size !== null && { size: size }), ...(frame !== null && { frame: frame }) }
                       : ratio;
                     
                     // Debug: log progress calculation
                     self.postMessage({
                       type: 'log',
-                      payload: { type: 'debug', message: 'DEBUG: Progress: out_time_ms=' + timeMsMatch[1] + ' (microseconds), currentTimeSec=' + currentTimeSec.toFixed(3) + ', duration=' + knownDurationSec.toFixed(3) + ', ratio=' + ratio.toFixed(4) + (size !== null ? ', size=' + size + ' bytes' : '') }
+                      payload: { type: 'debug', message: 'DEBUG: Progress: out_time_ms=' + timeMsMatch[1] + ' (microseconds), currentTimeSec=' + currentTimeSec.toFixed(3) + ', duration=' + knownDurationSec.toFixed(3) + ', ratio=' + ratio.toFixed(4) + (size !== null ? ', size=' + size + ' bytes' : '') + (frame !== null ? ', frame=' + frame : '') }
                     });
                     self.postMessage({ 
                       type: 'progress', 
@@ -285,6 +299,9 @@ const b = async (l) => {
                 } else if (sizeMatch) {
                   // Size update without time - just update lastSize for next time
                   lastSize = parseInt(sizeMatch[1], 10);
+                } else if (frameMatch) {
+                  // Frame update without time - just update lastFrame for next time
+                  lastFrame = parseInt(frameMatch[1], 10);
                 }
               } else if (message.includes('out_time_ms')) {
                 // Debug: out_time_ms found but duration not known yet
@@ -524,7 +541,7 @@ class M {
     this._logger("Failed to load core in worker!");
   }
   async createScriptURIs() {
-    const r = await f(this._source), e = await f(this._source.replace(".js", ".wasm"));
+    const r = await h(this._source), e = await h(this._source.replace(".js", ".wasm"));
     return {
       core: r,
       wasm: e
@@ -688,7 +705,7 @@ const k = {
   "gpl-extended": "/ffmpeg-core.js"
   // User placed UMD files in public/
 };
-class F extends M {
+class S extends M {
   constructor(e = {}) {
     let t = console.log, o = k[(e == null ? void 0 : e.config) ?? "lgpl-base"];
     (e == null ? void 0 : e.log) == !1 && (t = m), e != null && e.source && (o = e.source);
@@ -941,5 +958,5 @@ class F extends M {
   }
 }
 export {
-  F as FFmpeg
+  S as FFmpeg
 };
