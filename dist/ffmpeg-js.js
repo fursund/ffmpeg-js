@@ -454,7 +454,10 @@ const b = async (l) => {
           }
           const { path, data } = payload;
           try {
-            core.FS.writeFile(path, new Uint8Array(data));
+            // Handle both ArrayBuffer and array data (for backward compatibility)
+            // new Uint8Array() works with both ArrayBuffer and array-like objects
+            const uint8Array = new Uint8Array(data);
+            core.FS.writeFile(path, uint8Array);
             self.postMessage({
               id,
               type: 'writeFile',
@@ -578,14 +581,14 @@ class M {
   generateMessageId() {
     return `msg_${Date.now()}_${this._messageIdCounter++}`;
   }
-  sendWorkerMessage(r, e, t) {
-    return new Promise((o, s) => {
+  sendWorkerMessage(r, e, t, o) {
+    return new Promise((s, i) => {
       if (!this._worker) {
-        s(new Error("Worker not initialized"));
+        i(new Error("Worker not initialized"));
         return;
       }
-      const i = t || this.generateMessageId();
-      this._pendingMessages.set(i, { resolve: o, reject: s }), this._worker.postMessage({ id: i, type: r, payload: e });
+      const a = t || this.generateMessageId();
+      this._pendingMessages.set(a, { resolve: s, reject: i }), o && o.length > 0 ? this._worker.postMessage({ id: a, type: r, payload: e }, o) : this._worker.postMessage({ id: a, type: r, payload: e });
     });
   }
   async createWorker() {
@@ -732,7 +735,7 @@ class M {
   async writeFile(r, e) {
     try {
       const t = await b(e);
-      await this.sendWorkerMessage("writeFile", { path: r, data: Array.from(t) }), this._memory.push(r);
+      await this.sendWorkerMessage("writeFile", { path: r, data: t.buffer }, void 0, [t.buffer]), this._memory.push(r);
     } catch (t) {
       throw t.message && !t.message.includes(r) ? new Error(`Failed to write file ${r}: ${t.message}`) : t;
     }
