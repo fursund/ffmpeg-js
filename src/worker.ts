@@ -80,60 +80,8 @@ export const workerScript = `
       core.logger = loggerCallback;
     }
     
-    // Set up progress callback
-    // Helper to validate progress values - reject obviously invalid values
-    const isValidProgress = (value) => {
-      if (typeof value !== 'number' || !isFinite(value)) return false;
-      // If it's a percentage (0-1), it should be in that range
-      if (value >= 0 && value <= 1) return true;
-      // If it's a frame number, it should be reasonable (not billions)
-      // Frame numbers typically don't exceed 10 million for reasonable videos
-      if (value > 0 && value < 10000000) return true;
-      return false;
-    };
-    
-    const progressCallback = (progressObj) => {
-      // Validate progress values before sending to main thread
-      // The FFmpeg core sometimes sends invalid/uninitialized values
-      let validProgress = null;
-      
-      if (typeof progressObj === 'number') {
-        if (isValidProgress(progressObj)) {
-          validProgress = progressObj;
-        } else {
-          return;
-        }
-      } else if (progressObj && typeof progressObj.progress === 'number') {
-        if (isValidProgress(progressObj.progress)) {
-          validProgress = progressObj.progress;
-        } else {
-          return;
-        }
-      } else if (progressObj && typeof progressObj.time === 'number') {
-        // Validate time value - should be reasonable (not MAX_SAFE_INTEGER or negative huge values)
-        if (isFinite(progressObj.time) && progressObj.time >= 0 && progressObj.time < 86400 * 365) {
-          // Time-only progress is valid, but we can't determine percentage
-          // Still forward it, but main thread will handle it appropriately
-          validProgress = progressObj;
-        } else {
-          return;
-        }
-      }
-      
-      // Only send if we have valid progress data
-      if (validProgress !== null) {
-        self.postMessage({
-          type: 'progress',
-          payload: typeof validProgress === 'number' ? validProgress : progressObj,
-        });
-      }
-    };
-    
-    if (typeof core.setProgress === 'function') {
-      core.setProgress(progressCallback);
-    } else if (core.progress !== undefined) {
-      core.progress = progressCallback;
-    }
+    // Don't set up global progress callback - we only use out_time_ms from logs
+    // This ensures progress is only sent from logger parsing, not from core callbacks
     
     return core;
   }
@@ -197,26 +145,85 @@ export const workerScript = `
             // Track if we see "Aborted()" message and progress
             let aborted = false;
             let progressReached100 = false;
+            let knownDurationSec = null;
             const originalLogger = core.logger;
             const originalProgress = core.progress;
             
-            // Wrap logger to detect aborts
+            // Wrap logger to detect aborts and parse progress from logs
             const wrappedLogger = (logObj) => {
               if (originalLogger) {
                 originalLogger(logObj);
               }
-              const message = logObj?.message || String(logObj || '');
-              if (message && message.trim() === 'Aborted()') {
+              const message = (logObj?.message || String(logObj || '')).trim();
+              if (message === 'Aborted()') {
                 aborted = true;
+              }
+              // Parse duration once at the very beginning from ffmpeg banner
+              // This gives us totalDuration for calculating progress ratio
+              if (knownDurationSec === null && message.includes('Duration')) {
+                // Parse duration using regex - use RegExp constructor with double-escaped backslashes
+                // In template string, need \\\\ to get \\ in the string, which becomes \ in the regex
+                const pattern = 'Duration:\\\\s*(\\\\d{2}):(\\\\d{2}):(\\\\d{2})\\\\.(\\\\d+)';
+                const durationRegex = new RegExp(pattern);
+                const durationMatch = message.match(durationRegex);
+                
+                if (durationMatch) {
+                  const h = parseInt(durationMatch[1], 10);
+                  const mi = parseInt(durationMatch[2], 10);
+                  const s = parseInt(durationMatch[3], 10);
+                  const frac = durationMatch[4];
+                  const fracSec = frac.length === 6 
+                    ? parseInt(frac, 10) / 1000000
+                    : parseInt(frac, 10) / 100;
+                  knownDurationSec = h * 3600 + mi * 60 + s + fracSec;
+                  self.postMessage({
+                    type: 'log',
+                    payload: { type: 'debug', message: 'DEBUG: Parsed totalDuration=' + knownDurationSec.toFixed(6) + 's (h=' + h + ', m=' + mi + ', s=' + s + ', frac=' + frac + ')' }
+                  });
+                }
+              }
+              
+              // Parse progress from log messages using out_time_ms
+              // -progress pipe:1 outputs key=value pairs, one per line
+              // Format: "out_time_ms=4914000"
+              if (knownDurationSec !== null && knownDurationSec > 0) {
+                // Use RegExp constructor with double-escaped backslashes for template string
+                const timeMsRegex = new RegExp('out_time_ms\\\\s*=\\\\s*(\\\\d+)', 'i');
+                const timeMsMatch = message.match(timeMsRegex);
+                if (timeMsMatch) {
+                  // out_time_ms is in microseconds, not milliseconds! Divide by 1,000,000
+                  const currentTimeSec = parseInt(timeMsMatch[1], 10) / 1000000;
+                  if (currentTimeSec >= 0 && isFinite(currentTimeSec)) {
+                    // Calculate ratio - allow it to go to 1.0 naturally
+                    const ratio = Math.max(0, Math.min(1, currentTimeSec / knownDurationSec));
+                    // Debug: log progress calculation
+                    self.postMessage({
+                      type: 'log',
+                      payload: { type: 'debug', message: 'DEBUG: Progress: out_time_ms=' + timeMsMatch[1] + ' (microseconds), currentTimeSec=' + currentTimeSec.toFixed(3) + ', duration=' + knownDurationSec.toFixed(3) + ', ratio=' + ratio.toFixed(4) }
+                    });
+                    self.postMessage({ 
+                      type: 'progress', 
+                      payload: ratio 
+                    });
+                  }
+                }
+              } else if (message.includes('out_time_ms')) {
+                // Debug: out_time_ms found but duration not known yet
+                self.postMessage({
+                  type: 'log',
+                  payload: { type: 'debug', message: 'DEBUG: out_time_ms found but duration unknown (knownDurationSec=' + knownDurationSec + ')' }
+                });
               }
             };
             
             // Wrap progress callback to track if we reached 100%
+            // Note: We don't send progress from here - we use out_time_ms from logs instead
             const wrappedProgress = (progressObj) => {
               if (originalProgress) {
                 originalProgress(progressObj);
               }
-              // Check if progress reached 100%
+              
+              // Check if progress reached 100% for completion tracking
               if (typeof progressObj === 'number') {
                 if (progressObj >= 1.0) {
                   progressReached100 = true;
@@ -226,14 +233,17 @@ export const workerScript = `
                   progressReached100 = true;
                 }
               }
+              
+              // Don't send progress from here - we use out_time_ms parsing from logs instead
+              // This ensures consistent progress calculation based on time/duration
             };
             
             // Temporarily replace logger and progress to detect aborts and completion
             core.logger = wrappedLogger;
             core.progress = wrappedProgress;
             
-            // Ensure -loglevel is set to 'info' to see frame progress messages
-            // FFmpeg by default might not output verbose logs during encoding
+            // Ensure -loglevel is set to 'info' to see logs
+            // Also ensure -progress pipe:1 to emit time updates we can parse
             let execArgs = [...payload.args];
             const hasLogLevel = execArgs.some((arg, idx) => 
               arg === '-loglevel' || arg === '-v' || 
@@ -241,7 +251,7 @@ export const workerScript = `
             );
             if (!hasLogLevel) {
               // Insert -loglevel info after the input file (usually after -i)
-              // This ensures we see frame progress messages during encoding
+              // This ensures we see informational logs
               const inputIndex = execArgs.findIndex(arg => arg === '-i');
               if (inputIndex >= 0 && inputIndex < execArgs.length - 1) {
                 execArgs.splice(inputIndex + 2, 0, '-loglevel', 'info');
@@ -249,6 +259,14 @@ export const workerScript = `
                 // If no -i found, prepend to args
                 execArgs.unshift('-loglevel', 'info');
               }
+            }
+
+            // Add -progress pipe:1 if not provided so ffmpeg emits out_time(_ms) lines
+            const hasProgress = execArgs.some((arg, idx) => 
+              arg === '-progress' || (idx > 0 && execArgs[idx - 1] === '-progress')
+            );
+            if (!hasProgress) {
+              execArgs.push('-progress', 'pipe:1');
             }
             
             // Handle timeout (if provided)

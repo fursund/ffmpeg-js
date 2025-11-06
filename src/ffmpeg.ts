@@ -249,7 +249,7 @@ export class FFmpeg<
     };
     const callback = parseMetadata(meta);
     this.onMessage(callback);
-    await this.exec(['-i', 'probe']);
+    await this.exec(['-i', 'probe', '-f', 'null', '-']);
     this.removeOnMessage(callback);
     this.clearMemory();
     return meta;

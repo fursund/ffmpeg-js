@@ -43,15 +43,8 @@ export class FFmpegBase {
     if (msg.match(/(FFMPEG_END|error)/i)) {
       this._whenExecutionDone.forEach((cb) => cb());
     }
-    // Parse frame progress from messages as fallback
-    // The core progress callback should handle this, but we keep this for backwards compatibility
-    const frameMatch = msg.match(/frame=\s*(\d+)/);
-    if (frameMatch) {
-      const frameNum = parseInt(frameMatch[1], 10);
-      if (frameNum > 0) {
-        this._onProgress.forEach((cb) => cb(frameNum));
-      }
-    }
+    // Don't parse frame numbers as progress - we use out_time_ms from logs instead
+    // This ensures consistent progress calculation based on time/duration
     this._onMessage.forEach((cb) => cb(msg));
   }
 
@@ -100,7 +93,7 @@ export class FFmpegBase {
 
   private async createWorker() {
     this._uris = await this.createScriptURIs();
-    
+
     // Create worker from blob URL
     const blob = new Blob([workerScript], { type: 'application/javascript' });
     const workerURL = URL.createObjectURL(blob);
@@ -117,7 +110,7 @@ export class FFmpegBase {
       }
 
       // Handle progress messages
-      if (type === 'progress' && payload) {
+      if (type === 'progress' && payload !== undefined && payload !== null) {
         // Progress object can have different structures in 0.12
         // It might be { progress: number, time: number } or just a number
         let progressValue: number | { time: number } | null = null;
@@ -153,9 +146,19 @@ export class FFmpegBase {
           const progressNumber = typeof progressValue === 'number' 
             ? progressValue 
             : progressValue.time || 0;
+          // Debug: log progress forwarding
+          console.log('FFmpeg progress:', progressNumber, 'callbacks:', this._onProgress.length);
           this._onProgress.forEach((cb) => cb(progressNumber));
+        } else {
+          // Debug: log why progress was rejected
+          console.log('FFmpeg progress rejected:', { payload, type: typeof payload });
         }
         return;
+      }
+
+      // Mark execution done when worker reports exec completion or termination
+      if (type === 'exec' || type === 'terminate') {
+        this._whenExecutionDone.forEach((cb) => cb());
       }
 
       // Handle response messages
@@ -257,12 +260,8 @@ export class FFmpegBase {
       const execId = this.generateMessageId();
       this._currentExecId = execId;
       
+      // Wait for worker to complete execution - the promise resolves when worker sends response
       await this.sendWorkerMessage('exec', { args, id: execId }, execId);
-      
-      // Wait for execution done callback
-      await new Promise<void>((resolve) => {
-        this.whenExecutionDone(resolve);
-      });
 
       // Clear current exec ID if it matches
       if (this._currentExecId === execId) {

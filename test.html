@@ -277,7 +277,7 @@
             id="command-input" 
             placeholder='-i input.mp4 output.mp4'
             required
-          >-i input.mov -c copy output.mp4</textarea>
+          >-i input.mov output.mp4</textarea>
           <div class="command-examples">
             Examples: 
             <code>-i input.ogg -f wav output.wav</code> (uses threading) | 
@@ -288,6 +288,9 @@
 
         <button type="submit" id="process-btn" disabled>
           Process File
+        </button>
+        <button type="button" id="meta-btn" disabled style="margin-top: 12px;">
+          Get Metadata
         </button>
       </form>
 
@@ -350,6 +353,7 @@
       const fileInput = document.getElementById('file-input');
       const commandInput = document.getElementById('command-input');
       const processBtn = document.getElementById('process-btn');
+      const metaBtn = document.getElementById('meta-btn');
       const outputEl = document.getElementById('output');
       const outputInfo = document.getElementById('output-info');
       const downloadLink = document.getElementById('download-link');
@@ -393,6 +397,7 @@
       ffmpeg.whenReady(() => {
         updateStatus('ready', 'FFmpeg is ready!');
         processBtn.disabled = false;
+        metaBtn.disabled = false;
         log('FFmpeg initialized and ready', 'success');
       });
 
@@ -561,24 +566,36 @@
       // Track progress
       // In 0.12+, progress is a percentage (0-1), but we also parse frame numbers from messages
       ffmpeg.onProgress((progress) => {
+        console.log('onProgress called:', progress, 'isExecuting:', isExecuting, 'hasCompleted:', hasCompleted);
+        
+        // Ignore frame numbers (progress > 1) - we only use ratio-based progress (0-1)
+        if (typeof progress === 'number' && progress > 1) {
+          console.log('Progress update skipped: frame number detected, ignoring');
+          return;
+        }
+        
         // Don't update progress if execution has completed
-        if (!isExecuting || hasCompleted) {
+        // But allow progress updates even if isExecuting is false (async messages)
+        if (hasCompleted) {
+          console.log('Progress update skipped: hasCompleted=', hasCompleted);
           return;
         }
         
         // Ensure progress container is visible
         if (!progressContainer) {
+          console.log('Progress update skipped: no progressContainer');
           return;
         }
-        // Only make container visible if execution is still in progress
-        if (isExecuting && (progressContainer.style.display === 'none' || !progressContainer.style.display)) {
+        // Make container visible if not already
+        if (progressContainer.style.display === 'none' || !progressContainer.style.display) {
           progressContainer.style.display = 'block';
         }
         
-        // Check if progress is a percentage (0-1) or frame number
+        // Check if progress is a percentage (0-1)
         if (typeof progress === 'number' && progress >= 0 && progress <= 1) {
           // It's a percentage from 0.12 core progress callback
           const percent = Math.round(progress * 100);
+          console.log('Updating progress UI:', percent + '%');
           
           // If we reach 100%, automatically complete the operation
           if (percent >= 100 && currentArgs && currentStartTime) {
@@ -594,9 +611,15 @@
           
           // Update UI using requestAnimationFrame for consistency
           requestAnimationFrame(() => {
-            if (!isExecuting || hasCompleted) {
+            if (hasCompleted) {
+              console.log('Progress UI update skipped in RAF: hasCompleted=', hasCompleted);
               return;
             }
+            if (!progressBar || !progressText || !progressDetails) {
+              console.log('Progress UI update skipped: DOM elements not found');
+              return;
+            }
+            console.log('Setting progress bar to:', percent + '%');
             progressBar.style.width = percent + '%';
             progressText.textContent = percent + '%';
             progressDetails.textContent = `${percent}% complete`;
@@ -789,6 +812,40 @@
             processBtn.disabled = false;
             processBtn.textContent = 'Process File';
           }
+        }
+      });
+
+      // Handle metadata extraction
+      metaBtn.addEventListener('click', async () => {
+        const file = fileInput.files[0];
+        if (!file) {
+          alert('Please select a file');
+          return;
+        }
+
+        try {
+          metaBtn.disabled = true;
+          metaBtn.innerHTML = '<span class="spinner"></span>Reading metadata...';
+          logsEl.innerHTML = '';
+          log(`Reading metadata for: ${file.name}`);
+
+          const metadata = await ffmpeg.meta(file);
+          log('Metadata extracted successfully', 'success');
+          log(JSON.stringify(metadata, null, 2));
+
+          // Show a brief summary in output area
+          outputEl.classList.add('show');
+          outputInfo.innerHTML = `
+            <strong>File:</strong> ${file.name}<br>
+            <strong>Duration:</strong> ${metadata.duration ?? 'n/a'}s<br>
+            <strong>Streams:</strong> video=${metadata.streams.video.length}, audio=${metadata.streams.audio.length}
+          `;
+        } catch (error) {
+          log(`Error extracting metadata: ${error.message}`, 'error');
+          updateStatus('error', `Error: ${error.message}`);
+        } finally {
+          metaBtn.disabled = false;
+          metaBtn.textContent = 'Get Metadata';
         }
       });
 
