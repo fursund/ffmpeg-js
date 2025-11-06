@@ -9,13 +9,13 @@ const b = async (l) => {
   const r = {
     js: "application/javascript",
     wasm: "application/wasm"
-  }, e = await (await fetch(l)).arrayBuffer(), t = l.includes(".worker.js") ? "js" : ((s = l.split(".")) == null ? void 0 : s.at(-1)) ?? "js", a = new Blob([e], {
+  }, e = await (await fetch(l)).arrayBuffer(), t = l.includes(".worker.js") ? "js" : ((s = l.split(".")) == null ? void 0 : s.at(-1)) ?? "js", o = new Blob([e], {
     type: r[t] || "application/javascript"
   });
-  return URL.createObjectURL(a);
+  return URL.createObjectURL(o);
 }, m = (l, ...r) => {
 }, _ = (l) => (r) => {
-  var e, t, a, s, i, o, c, n;
+  var e, t, o, s, i, a, n, c;
   if (r.match(/Input #/) && Object.assign(l, {
     formats: r.replace(/(Input #|from 'probe')/gm, "").split(",").map((p) => p.trim()).filter((p) => p.length > 1)
   }), r.match(/Duration:/)) {
@@ -41,7 +41,7 @@ const b = async (l) => {
       const g = d;
       for (const h of p)
         h.match(/Video:/) && Object.assign(g, {
-          codec: (i = (s = (a = h.match(/Video:\W*[a-z0-9_-]*\W/i)) == null ? void 0 : a.at(0)) == null ? void 0 : s.replace(/Video:/, "")) == null ? void 0 : i.trim()
+          codec: (i = (s = (o = h.match(/Video:\W*[a-z0-9_-]*\W/i)) == null ? void 0 : o.at(0)) == null ? void 0 : s.replace(/Video:/, "")) == null ? void 0 : i.trim()
         }), h.match(/[0-9]*x[0-9]*/) && (Object.assign(g, { width: parseFloat(h.split("x")[0]) }), Object.assign(g, { height: parseFloat(h.split("x")[1]) })), h.match(/fps/) && Object.assign(g, {
           fps: parseFloat(h.replace("fps", "").trim())
         });
@@ -51,7 +51,7 @@ const b = async (l) => {
       const g = d;
       for (const h of p)
         h.match(/Audio:/) && Object.assign(g, {
-          codec: (n = (c = (o = h.match(/Audio:\W*[a-z0-9_-]*\W/i)) == null ? void 0 : o.at(0)) == null ? void 0 : c.replace(/Audio:/, "")) == null ? void 0 : n.trim()
+          codec: (c = (n = (a = h.match(/Audio:\W*[a-z0-9_-]*\W/i)) == null ? void 0 : a.at(0)) == null ? void 0 : n.replace(/Audio:/, "")) == null ? void 0 : c.trim()
         }), h.match(/hz/i) && Object.assign(g, {
           sampleRate: parseInt(h.replace(/[\D]/gm, ""))
         });
@@ -201,6 +201,7 @@ const b = async (l) => {
             let aborted = false;
             let progressReached100 = false;
             let knownDurationSec = null;
+            let lastSize = 0; // Track last size to accumulate
             const originalLogger = core.logger;
             const originalProgress = core.progress;
             
@@ -238,29 +239,52 @@ const b = async (l) => {
                 }
               }
               
-              // Parse progress from log messages using out_time_ms
+              // Parse progress from log messages using out_time_ms and total_size
               // -progress pipe:1 outputs key=value pairs, one per line
-              // Format: "out_time_ms=4914000"
+              // Format: "out_time_ms=4914000" and "total_size=48"
               if (knownDurationSec !== null && knownDurationSec > 0) {
-                // Use RegExp constructor with double-escaped backslashes for template string
+                // Parse out_time_ms
                 const timeMsRegex = new RegExp('out_time_ms\\\\s*=\\\\s*(\\\\d+)', 'i');
                 const timeMsMatch = message.match(timeMsRegex);
+                
+                // Parse total_size (in bytes)
+                const sizeRegex = new RegExp('total_size\\\\s*=\\\\s*(\\\\d+)', 'i');
+                const sizeMatch = message.match(sizeRegex);
+                
                 if (timeMsMatch) {
                   // out_time_ms is in microseconds, not milliseconds! Divide by 1,000,000
                   const currentTimeSec = parseInt(timeMsMatch[1], 10) / 1000000;
                   if (currentTimeSec >= 0 && isFinite(currentTimeSec)) {
                     // Calculate ratio - allow it to go to 1.0 naturally
                     const ratio = Math.max(0, Math.min(1, currentTimeSec / knownDurationSec));
+                    
+                    // Get size if available
+                    let size = null;
+                    if (sizeMatch) {
+                      size = parseInt(sizeMatch[1], 10);
+                      lastSize = size; // Update last known size
+                    } else if (lastSize > 0) {
+                      size = lastSize; // Use last known size if not in this message
+                    }
+                    
+                    // Send progress with size information
+                    const progressPayload = size !== null 
+                      ? { progress: ratio, size: size }
+                      : ratio;
+                    
                     // Debug: log progress calculation
                     self.postMessage({
                       type: 'log',
-                      payload: { type: 'debug', message: 'DEBUG: Progress: out_time_ms=' + timeMsMatch[1] + ' (microseconds), currentTimeSec=' + currentTimeSec.toFixed(3) + ', duration=' + knownDurationSec.toFixed(3) + ', ratio=' + ratio.toFixed(4) }
+                      payload: { type: 'debug', message: 'DEBUG: Progress: out_time_ms=' + timeMsMatch[1] + ' (microseconds), currentTimeSec=' + currentTimeSec.toFixed(3) + ', duration=' + knownDurationSec.toFixed(3) + ', ratio=' + ratio.toFixed(4) + (size !== null ? ', size=' + size + ' bytes' : '') }
                     });
                     self.postMessage({ 
                       type: 'progress', 
-                      payload: ratio 
+                      payload: progressPayload 
                     });
                   }
+                } else if (sizeMatch) {
+                  // Size update without time - just update lastSize for next time
+                  lastSize = parseInt(sizeMatch[1], 10);
                 }
               } else if (message.includes('out_time_ms')) {
                 // Debug: out_time_ms found but duration not known yet
@@ -322,12 +346,6 @@ const b = async (l) => {
             );
             if (!hasProgress) {
               execArgs.push('-progress', 'pipe:1');
-            }
-            
-            // Handle timeout (if provided)
-            const timeout = payload.timeout !== undefined ? payload.timeout : -1;
-            if (typeof core.setTimeout === 'function') {
-              core.setTimeout(timeout);
             }
             
             // Execute the command - in 0.12, exec() is synchronous and blocks until completion
@@ -516,41 +534,33 @@ class M {
     return `msg_${Date.now()}_${this._messageIdCounter++}`;
   }
   sendWorkerMessage(r, e, t) {
-    return new Promise((a, s) => {
+    return new Promise((o, s) => {
       if (!this._worker) {
         s(new Error("Worker not initialized"));
         return;
       }
       const i = t || this.generateMessageId();
-      this._pendingMessages.set(i, { resolve: a, reject: s }), this._worker.postMessage({ id: i, type: r, payload: e });
-      const o = r === "exec" ? 3e5 : 3e4;
-      setTimeout(() => {
-        this._pendingMessages.has(i) && (this._pendingMessages.delete(i), s(new Error(`Worker message timeout: ${r} (${o}ms)`)));
-      }, o);
+      this._pendingMessages.set(i, { resolve: o, reject: s }), this._worker.postMessage({ id: i, type: r, payload: e });
     });
   }
   async createWorker() {
     this._uris = await this.createScriptURIs();
     const r = new Blob([x], { type: "application/javascript" }), e = URL.createObjectURL(r);
     if (this._worker = new Worker(e), this._worker.onmessage = (t) => {
-      const { id: a, type: s, success: i, payload: o, error: c } = t.data;
-      if (s === "log" && o) {
-        this.handleMessage(o.message);
+      const { id: o, type: s, success: i, payload: a, error: n } = t.data;
+      if (s === "log" && a) {
+        this.handleMessage(a.message);
         return;
       }
-      if (s === "progress" && o !== void 0 && o !== null) {
-        let n = null;
+      if (s === "progress" && a !== void 0 && a !== null) {
+        let c = null;
         const p = (d) => isFinite(d) ? d >= 0 && d <= 1 || d > 0 && d < 1e7 : !1;
-        if (typeof o == "number" ? p(o) && (n = o) : o && typeof o.progress == "number" ? p(o.progress) && (n = o.progress) : o && typeof o.time == "number" && isFinite(o.time) && o.time >= 0 && o.time < 86400 * 365 && (n = o), n !== null) {
-          const d = typeof n == "number" ? n : n.time || 0;
-          console.log("FFmpeg progress:", d, "callbacks:", this._onProgress.length), this._onProgress.forEach((g) => g(d));
-        } else
-          console.log("FFmpeg progress rejected:", { payload: o, type: typeof o });
+        typeof a == "number" ? p(a) && (c = a) : a && typeof a.progress == "number" ? p(a.progress) && (c = a) : a && typeof a.time == "number" && isFinite(a.time) && a.time >= 0 && a.time < 86400 * 365 && (c = a), c !== null ? (console.log("FFmpeg progress:", c, "callbacks:", this._onProgress.length), this._onProgress.forEach((d) => d(c))) : console.log("FFmpeg progress rejected:", { payload: a, type: typeof a });
         return;
       }
-      if ((s === "exec" || s === "terminate") && this._whenExecutionDone.forEach((n) => n()), a && this._pendingMessages.has(a)) {
-        const { resolve: n, reject: p } = this._pendingMessages.get(a);
-        this._pendingMessages.delete(a), i ? n(o) : p(new Error(c || "Unknown error"));
+      if ((s === "exec" || s === "terminate") && this._whenExecutionDone.forEach((c) => c()), o && this._pendingMessages.has(o)) {
+        const { resolve: c, reject: p } = this._pendingMessages.get(o);
+        this._pendingMessages.delete(o), i ? c(a) : p(new Error(n || "Unknown error"));
       }
     }, this._worker.onerror = (t) => {
       this._logger("Worker error:", t), this.handleMessage(`Worker error: ${t.message}`);
@@ -678,11 +688,11 @@ const k = {
   "gpl-extended": "/ffmpeg-core.js"
   // User placed UMD files in public/
 };
-class S extends M {
+class F extends M {
   constructor(e = {}) {
-    let t = console.log, a = k[(e == null ? void 0 : e.config) ?? "lgpl-base"];
-    (e == null ? void 0 : e.log) == !1 && (t = m), e != null && e.source && (a = e.source);
-    super({ logger: t, source: a });
+    let t = console.log, o = k[(e == null ? void 0 : e.config) ?? "lgpl-base"];
+    (e == null ? void 0 : e.log) == !1 && (t = m), e != null && e.source && (o = e.source);
+    super({ logger: t, source: o });
     u(this, "_inputs", []);
     u(this, "_output");
     u(this, "_middleware", []);
@@ -705,18 +715,18 @@ class S extends M {
     }, t = {
       video: JSON.parse(JSON.stringify(e)),
       audio: JSON.parse(JSON.stringify(e))
-    }, a = (s) => {
+    }, o = (s) => {
       s = s.substring(7).replace(/\W{2,}/, " ").trim();
-      const i = s.split(" "), o = i.shift() ?? "", c = i.join(" ");
-      return { [o]: c };
+      const i = s.split(" "), a = i.shift() ?? "", n = i.join(" ");
+      return { [a]: n };
     };
     return this.onMessage((s) => {
       s = s.trim();
       let i = [];
       if (s.match(/[DEVASIL\.]{6}\W(?!=)/)) {
         s.match(/^D.V/) && i.push(["video", "decoders"]), s.match(/^.EV/) && i.push(["video", "encoders"]), s.match(/^D.A/) && i.push(["audio", "decoders"]), s.match(/^.EA/) && i.push(["audio", "encoders"]);
-        for (const [o, c] of i)
-          Object.assign(t[o][c], a(s));
+        for (const [a, n] of i)
+          Object.assign(t[a][n], o(s));
       }
     }), await this.exec(["-codecs"]), t;
   }
@@ -734,18 +744,18 @@ class S extends M {
     const e = {
       muxers: {},
       demuxers: {}
-    }, t = (a) => {
-      a = a.substring(3).replace(/\W{2,}/, " ").trim();
-      const s = a.split(" "), i = s.shift() ?? "", o = s.join(" ");
-      return { [i]: o };
+    }, t = (o) => {
+      o = o.substring(3).replace(/\W{2,}/, " ").trim();
+      const s = o.split(" "), i = s.shift() ?? "", a = s.join(" ");
+      return { [i]: a };
     };
-    return this.onMessage((a) => {
-      a = a.substring(1);
+    return this.onMessage((o) => {
+      o = o.substring(1);
       let s = [];
-      if (a.match(/[DE\.]{2}\W(?!=)/)) {
-        a.match(/^D./) && s.push("demuxers"), a.match(/^.E/) && s.push("muxers");
+      if (o.match(/[DE\.]{2}\W(?!=)/)) {
+        o.match(/^D./) && s.push("demuxers"), o.match(/^.E/) && s.push("muxers");
         for (const i of s)
-          Object.assign(e[i], t(a));
+          Object.assign(e[i], t(o));
       }
     }), await this.exec(["-formats"]), e;
   }
@@ -829,8 +839,8 @@ class S extends M {
     await this.writeFile("probe", e);
     const t = {
       streams: { audio: [], video: [] }
-    }, a = _(t);
-    return this.onMessage(a), await this.exec(["-i", "probe", "-f", "null", "-"]), this.removeOnMessage(a), this.clearMemory(), t;
+    }, o = _(t);
+    return this.onMessage(o), await this.exec(["-i", "probe", "-f", "null", "-"]), this.removeOnMessage(o), this.clearMemory(), t;
   }
   /**
    * Generate a series of thumbnails
@@ -848,19 +858,19 @@ class S extends M {
    *    document.body.appendChild(img);
    * }
    */
-  async *thumbnails(e, t = 5, a = 0, s) {
+  async *thumbnails(e, t = 5, o = 0, s) {
     if (!s) {
-      const { duration: o } = await this.meta(e);
-      o ? s = o : (console.warn(
+      const { duration: a } = await this.meta(e);
+      a ? s = a : (console.warn(
         "Could not extract duration from meta data please provide a stop argument. Falling back to 1sec otherwise."
       ), s = 1);
     }
-    const i = (s - a) / t;
+    const i = (s - o) / t;
     await this.writeFile("input", e);
-    for (let o = a; o < s; o += i) {
+    for (let a = o; a < s; a += i) {
       await this.exec([
         "-ss",
-        o.toString(),
+        a.toString(),
         "-i",
         "input",
         "-frames:v",
@@ -868,8 +878,8 @@ class S extends M {
         "image.jpg"
       ]);
       try {
-        const c = await this.readFile("image.jpg"), n = new ArrayBuffer(c.length);
-        new Uint8Array(n).set(c), yield new Blob([n], { type: "image/jpeg" });
+        const n = await this.readFile("image.jpg"), c = new ArrayBuffer(n.length);
+        new Uint8Array(c).set(n), yield new Blob([c], { type: "image/jpeg" });
       } catch {
       }
     }
@@ -878,9 +888,9 @@ class S extends M {
   parseOutputOptions() {
     if (!this._output)
       throw new Error("Please define the output first");
-    const { format: e, path: t, audio: a, video: s, seek: i, duration: o } = this._output, c = [];
-    let n = `output.${e}`;
-    return t && (n = t + n), i && c.push("-ss", i.toString()), o && c.push("-t", o.toString()), c.push(...this.parseAudioOutput(a)), c.push(...this.parseVideoOutput(s)), c.push(n), c;
+    const { format: e, path: t, audio: o, video: s, seek: i, duration: a } = this._output, n = [];
+    let c = `output.${e}`;
+    return t && (c = t + c), i && n.push("-ss", i.toString()), a && n.push("-t", a.toString()), n.push(...this.parseAudioOutput(o)), n.push(...this.parseVideoOutput(s)), n.push(c), n;
   }
   parseAudioOutput(e) {
     if (!e)
@@ -907,18 +917,18 @@ class S extends M {
   async parseImageInput(e) {
     if (!("sequence" in e))
       return [];
-    const t = e.sequence.length.toString().length, a = "image-sequence-";
-    let s = `${a}%0${t}d`;
+    const t = e.sequence.length.toString().length, o = "image-sequence-";
+    let s = `${o}%0${t}d`;
     const i = [];
-    for (const [o, c] of e.sequence.entries())
-      if (c instanceof Blob || c.match(/(^http(s?):\/\/|^\/\S)/)) {
-        const n = `${a}${o.toString().padStart(o, "0")}`;
-        await this.writeFile(n, c);
+    for (const [a, n] of e.sequence.entries())
+      if (n instanceof Blob || n.match(/(^http(s?):\/\/|^\/\S)/)) {
+        const c = `${o}${a.toString().padStart(a, "0")}`;
+        await this.writeFile(c, n);
       } else {
-        const n = c.match(/[0-9]{1,20}/);
-        if (n) {
-          const [p] = n;
-          s = c.replace(/[0-9]{1,20}/, `%0${p.length}d`);
+        const c = n.match(/[0-9]{1,20}/);
+        if (c) {
+          const [p] = c;
+          s = n.replace(/[0-9]{1,20}/, `%0${p.length}d`);
         }
       }
     return i.push("-framerate", e.framerate.toString()), i.push("-i", s), i;
@@ -926,10 +936,10 @@ class S extends M {
   async parseMediaInput(e) {
     if (!("source" in e))
       return [];
-    const { source: t } = e, a = [], s = `input-${(/* @__PURE__ */ new Date()).getTime()}`;
-    return e.seek && a.push("-ss", e.seek.toString()), t instanceof Blob || t.match(/(^http(s?):\/\/|^\/\S)/) ? (await this.writeFile(s, t), a.push("-i", s)) : a.push("-i", t), a;
+    const { source: t } = e, o = [], s = `input-${(/* @__PURE__ */ new Date()).getTime()}`;
+    return e.seek && o.push("-ss", e.seek.toString()), t instanceof Blob || t.match(/(^http(s?):\/\/|^\/\S)/) ? (await this.writeFile(s, t), o.push("-i", s)) : o.push("-i", t), o;
   }
 }
 export {
-  S as FFmpeg
+  F as FFmpeg
 };

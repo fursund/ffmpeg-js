@@ -14,7 +14,10 @@ export type MessageCallback = (msg: string) => void;
  * gets called during rendering when a number
  * of frames has been rendered
  */
-export type ProgressCallback = (progress: number) => void;
+export type ProgressCallback = (progress: number | {
+    progress: number;
+    size?: number;
+}) => void;
 /**
  * Defines encoder and decoder records that
  * contain the supported formats
