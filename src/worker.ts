@@ -147,6 +147,7 @@ export const workerScript = `
             let progressReached100 = false;
             let knownDurationSec = null;
             let lastSize = 0; // Track last size to accumulate
+            let lastFrame = 0; // Track last frame number
             const originalLogger = core.logger;
             const originalProgress = core.progress;
             
@@ -184,9 +185,9 @@ export const workerScript = `
                 }
               }
               
-              // Parse progress from log messages using out_time_ms and total_size
+              // Parse progress from log messages using out_time_ms, total_size, and frame
               // -progress pipe:1 outputs key=value pairs, one per line
-              // Format: "out_time_ms=4914000" and "total_size=48"
+              // Format: "out_time_ms=4914000", "total_size=48", and "frame=78"
               if (knownDurationSec !== null && knownDurationSec > 0) {
                 // Parse out_time_ms
                 const timeMsRegex = new RegExp('out_time_ms\\\\s*=\\\\s*(\\\\d+)', 'i');
@@ -195,6 +196,10 @@ export const workerScript = `
                 // Parse total_size (in bytes)
                 const sizeRegex = new RegExp('total_size\\\\s*=\\\\s*(\\\\d+)', 'i');
                 const sizeMatch = message.match(sizeRegex);
+                
+                // Parse frame number
+                const frameRegex = new RegExp('frame\\\\s*=\\\\s*(\\\\d+)', 'i');
+                const frameMatch = message.match(frameRegex);
                 
                 if (timeMsMatch) {
                   // out_time_ms is in microseconds, not milliseconds! Divide by 1,000,000
@@ -212,15 +217,24 @@ export const workerScript = `
                       size = lastSize; // Use last known size if not in this message
                     }
                     
-                    // Send progress with size information
-                    const progressPayload = size !== null 
-                      ? { progress: ratio, size: size }
+                    // Get frame if available
+                    let frame = null;
+                    if (frameMatch) {
+                      frame = parseInt(frameMatch[1], 10);
+                      lastFrame = frame; // Update last known frame
+                    } else if (lastFrame > 0) {
+                      frame = lastFrame; // Use last known frame if not in this message
+                    }
+                    
+                    // Send progress with size and frame information
+                    const progressPayload = (size !== null || frame !== null)
+                      ? { progress: ratio, ...(size !== null && { size: size }), ...(frame !== null && { frame: frame }) }
                       : ratio;
                     
                     // Debug: log progress calculation
                     self.postMessage({
                       type: 'log',
-                      payload: { type: 'debug', message: 'DEBUG: Progress: out_time_ms=' + timeMsMatch[1] + ' (microseconds), currentTimeSec=' + currentTimeSec.toFixed(3) + ', duration=' + knownDurationSec.toFixed(3) + ', ratio=' + ratio.toFixed(4) + (size !== null ? ', size=' + size + ' bytes' : '') }
+                      payload: { type: 'debug', message: 'DEBUG: Progress: out_time_ms=' + timeMsMatch[1] + ' (microseconds), currentTimeSec=' + currentTimeSec.toFixed(3) + ', duration=' + knownDurationSec.toFixed(3) + ', ratio=' + ratio.toFixed(4) + (size !== null ? ', size=' + size + ' bytes' : '') + (frame !== null ? ', frame=' + frame : '') }
                     });
                     self.postMessage({ 
                       type: 'progress', 
@@ -230,6 +244,9 @@ export const workerScript = `
                 } else if (sizeMatch) {
                   // Size update without time - just update lastSize for next time
                   lastSize = parseInt(sizeMatch[1], 10);
+                } else if (frameMatch) {
+                  // Frame update without time - just update lastFrame for next time
+                  lastFrame = parseInt(frameMatch[1], 10);
                 }
               } else if (message.includes('out_time_ms')) {
                 // Debug: out_time_ms found but duration not known yet
