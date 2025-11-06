@@ -399,7 +399,10 @@ export const workerScript = `
           }
           const { path, data } = payload;
           try {
-            core.FS.writeFile(path, new Uint8Array(data));
+            // Handle both ArrayBuffer and array data (for backward compatibility)
+            // new Uint8Array() works with both ArrayBuffer and array-like objects
+            const uint8Array = new Uint8Array(data);
+            core.FS.writeFile(path, uint8Array);
             self.postMessage({
               id,
               type: 'writeFile',

@@ -67,7 +67,7 @@ export class FFmpegBase {
     return `msg_${Date.now()}_${this._messageIdCounter++}`;
   }
 
-  private sendWorkerMessage(type: string, payload?: any, messageId?: string): Promise<any> {
+  private sendWorkerMessage(type: string, payload?: any, messageId?: string, transfer?: Transferable[]): Promise<any> {
     return new Promise((resolve, reject) => {
       if (!this._worker) {
         reject(new Error('Worker not initialized'));
@@ -77,7 +77,11 @@ export class FFmpegBase {
       const id = messageId || this.generateMessageId();
       this._pendingMessages.set(id, { resolve, reject });
 
-      this._worker.postMessage({ id, type, payload });
+      if (transfer && transfer.length > 0) {
+        this._worker.postMessage({ id, type, payload }, transfer);
+      } else {
+        this._worker.postMessage({ id, type, payload });
+      }
 
       // No timeout - let operations run until completion
     });
@@ -350,7 +354,8 @@ export class FFmpegBase {
   public async writeFile(path: string, file: string | Blob): Promise<void> {
     try {
       const data: Uint8Array = await toUint8Array(file);
-      await this.sendWorkerMessage('writeFile', { path, data: Array.from(data) });
+      // Send ArrayBuffer directly instead of converting to array to avoid "Invalid array length" errors with large files
+      await this.sendWorkerMessage('writeFile', { path, data: data.buffer }, undefined, [data.buffer]);
       this._memory.push(path);
     } catch (error: any) {
       // Re-throw with more context if needed
