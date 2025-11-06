@@ -369,6 +369,7 @@
       let hasCompleted = false;
       let currentArgs = null;
       let currentStartTime = null;
+      let lastProgressSize = null; // Track last size from progress
 
       function log(message, type = 'info') {
         const entry = document.createElement('div');
@@ -455,6 +456,15 @@
         }
       });
 
+      // Helper function to format bytes to human-readable size
+      function formatBytes(bytes) {
+        if (bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
+      }
+      
       // Helper function to find output filename from args
       function findOutputFileName(args) {
         for (let i = args.length - 1; i >= 0; i--) {
@@ -591,14 +601,38 @@
           progressContainer.style.display = 'block';
         }
         
-        // Check if progress is a percentage (0-1)
+        // Check if progress is a percentage (0-1) or an object with progress and size
+        let progressRatio = null;
+        let sizeBytes = null;
+        
         if (typeof progress === 'number' && progress >= 0 && progress <= 1) {
           // It's a percentage from 0.12 core progress callback
-          const percent = Math.round(progress * 100);
-          console.log('Updating progress UI:', percent + '%');
+          progressRatio = progress;
+        } else if (progress && typeof progress === 'object' && typeof progress.progress === 'number') {
+          // Progress object with optional size
+          progressRatio = progress.progress;
+          sizeBytes = progress.size;
+          // Track last size for 100% display
+          if (sizeBytes !== null && sizeBytes !== undefined) {
+            lastProgressSize = sizeBytes;
+          }
+        }
+        
+        if (progressRatio !== null) {
+          const percent = Math.round(progressRatio * 100);
+          // Use current size or last known size
+          const displaySize = sizeBytes !== null && sizeBytes !== undefined ? sizeBytes : lastProgressSize;
+          console.log('Updating progress UI:', percent + '%', displaySize ? `(${formatBytes(displaySize)})` : '');
           
           // If we reach 100%, automatically complete the operation
           if (percent >= 100 && currentArgs && currentStartTime) {
+            // Show 100% with size before completing
+            if (progressBar && progressText && progressDetails) {
+              progressBar.style.width = '100%';
+              progressText.textContent = '100%';
+              const sizeText = displaySize ? ` (${formatBytes(displaySize)})` : '';
+              progressDetails.textContent = `100% complete${sizeText}`;
+            }
             completeOperation(currentArgs, currentStartTime).catch(error => {
               log(`Error completing operation: ${error.message}`, 'error');
               isExecuting = false;
@@ -622,9 +656,10 @@
             console.log('Setting progress bar to:', percent + '%');
             progressBar.style.width = percent + '%';
             progressText.textContent = percent + '%';
-            progressDetails.textContent = `${percent}% complete`;
+            const sizeText = displaySize ? ` (${formatBytes(displaySize)})` : '';
+            progressDetails.textContent = `${percent}% complete${sizeText}`;
           });
-          log(`Progress: ${percent}%`, 'info');
+          log(`Progress: ${percent}%${displaySize ? ` (${formatBytes(displaySize)})` : ''}`, 'info');
         } else if (typeof progress === 'number' && progress > 1) {
           // It's a frame number (legacy or from message parsing)
           currentFrame = progress;
@@ -744,6 +779,7 @@
           hasCompleted = false;
           currentArgs = null;
           currentStartTime = null;
+          lastProgressSize = null;
           progressBar.style.width = '0%';
           progressText.textContent = '0%';
           progressDetails.textContent = '';

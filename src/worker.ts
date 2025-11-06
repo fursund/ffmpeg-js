@@ -146,6 +146,7 @@ export const workerScript = `
             let aborted = false;
             let progressReached100 = false;
             let knownDurationSec = null;
+            let lastSize = 0; // Track last size to accumulate
             const originalLogger = core.logger;
             const originalProgress = core.progress;
             
@@ -183,29 +184,52 @@ export const workerScript = `
                 }
               }
               
-              // Parse progress from log messages using out_time_ms
+              // Parse progress from log messages using out_time_ms and total_size
               // -progress pipe:1 outputs key=value pairs, one per line
-              // Format: "out_time_ms=4914000"
+              // Format: "out_time_ms=4914000" and "total_size=48"
               if (knownDurationSec !== null && knownDurationSec > 0) {
-                // Use RegExp constructor with double-escaped backslashes for template string
+                // Parse out_time_ms
                 const timeMsRegex = new RegExp('out_time_ms\\\\s*=\\\\s*(\\\\d+)', 'i');
                 const timeMsMatch = message.match(timeMsRegex);
+                
+                // Parse total_size (in bytes)
+                const sizeRegex = new RegExp('total_size\\\\s*=\\\\s*(\\\\d+)', 'i');
+                const sizeMatch = message.match(sizeRegex);
+                
                 if (timeMsMatch) {
                   // out_time_ms is in microseconds, not milliseconds! Divide by 1,000,000
                   const currentTimeSec = parseInt(timeMsMatch[1], 10) / 1000000;
                   if (currentTimeSec >= 0 && isFinite(currentTimeSec)) {
                     // Calculate ratio - allow it to go to 1.0 naturally
                     const ratio = Math.max(0, Math.min(1, currentTimeSec / knownDurationSec));
+                    
+                    // Get size if available
+                    let size = null;
+                    if (sizeMatch) {
+                      size = parseInt(sizeMatch[1], 10);
+                      lastSize = size; // Update last known size
+                    } else if (lastSize > 0) {
+                      size = lastSize; // Use last known size if not in this message
+                    }
+                    
+                    // Send progress with size information
+                    const progressPayload = size !== null 
+                      ? { progress: ratio, size: size }
+                      : ratio;
+                    
                     // Debug: log progress calculation
                     self.postMessage({
                       type: 'log',
-                      payload: { type: 'debug', message: 'DEBUG: Progress: out_time_ms=' + timeMsMatch[1] + ' (microseconds), currentTimeSec=' + currentTimeSec.toFixed(3) + ', duration=' + knownDurationSec.toFixed(3) + ', ratio=' + ratio.toFixed(4) }
+                      payload: { type: 'debug', message: 'DEBUG: Progress: out_time_ms=' + timeMsMatch[1] + ' (microseconds), currentTimeSec=' + currentTimeSec.toFixed(3) + ', duration=' + knownDurationSec.toFixed(3) + ', ratio=' + ratio.toFixed(4) + (size !== null ? ', size=' + size + ' bytes' : '') }
                     });
                     self.postMessage({ 
                       type: 'progress', 
-                      payload: ratio 
+                      payload: progressPayload 
                     });
                   }
+                } else if (sizeMatch) {
+                  // Size update without time - just update lastSize for next time
+                  lastSize = parseInt(sizeMatch[1], 10);
                 }
               } else if (message.includes('out_time_ms')) {
                 // Debug: out_time_ms found but duration not known yet
@@ -267,12 +291,6 @@ export const workerScript = `
             );
             if (!hasProgress) {
               execArgs.push('-progress', 'pipe:1');
-            }
-            
-            // Handle timeout (if provided)
-            const timeout = payload.timeout !== undefined ? payload.timeout : -1;
-            if (typeof core.setTimeout === 'function') {
-              core.setTimeout(timeout);
             }
             
             // Execute the command - in 0.12, exec() is synchronous and blocks until completion

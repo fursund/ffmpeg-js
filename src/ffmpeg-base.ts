@@ -79,15 +79,7 @@ export class FFmpegBase {
 
       this._worker.postMessage({ id, type, payload });
 
-      // Timeout after 5 minutes for exec operations (long-running FFmpeg commands)
-      // Other operations should be quick
-      const timeout = type === 'exec' ? 300000 : 30000;
-      setTimeout(() => {
-        if (this._pendingMessages.has(id)) {
-          this._pendingMessages.delete(id);
-          reject(new Error(`Worker message timeout: ${type} (${timeout}ms)`));
-        }
-      }, timeout);
+      // No timeout - let operations run until completion
     });
   }
 
@@ -132,7 +124,8 @@ export class FFmpegBase {
           }
         } else if (payload && typeof payload.progress === 'number') {
           if (isValidProgress(payload.progress)) {
-            progressValue = payload.progress;
+            // Progress object with optional size
+            progressValue = payload;
           }
         } else if (payload && typeof payload.time === 'number') {
           // Validate time value - should be reasonable (not MAX_SAFE_INTEGER or negative huge values)
@@ -142,13 +135,10 @@ export class FFmpegBase {
         }
         
         if (progressValue !== null) {
-          // ProgressCallback expects a number, so convert object to number if needed
-          const progressNumber = typeof progressValue === 'number' 
-            ? progressValue 
-            : progressValue.time || 0;
+          // Pass the full progress value (number or object) to callbacks
           // Debug: log progress forwarding
-          console.log('FFmpeg progress:', progressNumber, 'callbacks:', this._onProgress.length);
-          this._onProgress.forEach((cb) => cb(progressNumber));
+          console.log('FFmpeg progress:', progressValue, 'callbacks:', this._onProgress.length);
+          this._onProgress.forEach((cb) => cb(progressValue as any));
         } else {
           // Debug: log why progress was rejected
           console.log('FFmpeg progress rejected:', { payload, type: typeof payload });
