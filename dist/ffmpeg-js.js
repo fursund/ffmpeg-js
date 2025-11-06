@@ -1,6 +1,6 @@
 var w = Object.defineProperty;
 var y = (l, r, e) => r in l ? w(l, r, { enumerable: !0, configurable: !0, writable: !0, value: e }) : l[r] = e;
-var u = (l, r, e) => (y(l, typeof r != "symbol" ? r + "" : r, e), e);
+var d = (l, r, e) => (y(l, typeof r != "symbol" ? r + "" : r, e), e);
 const b = async (l) => {
   let r;
   return typeof l == "string" ? r = await (await fetch(l)).arrayBuffer() : r = await await l.arrayBuffer(), new Uint8Array(r);
@@ -20,25 +20,25 @@ const b = async (l) => {
     formats: r.replace(/(Input #|from 'probe')/gm, "").split(",").map((p) => p.trim()).filter((p) => p.length > 1)
   }), r.match(/Duration:/)) {
     const p = r.split(",");
-    for (const d of p) {
-      if (d.match(/Duration:/)) {
-        const g = d.replace(/Duration:/, "").trim();
+    for (const u of p) {
+      if (u.match(/Duration:/)) {
+        const g = u.replace(/Duration:/, "").trim();
         Object.assign(l, {
           duration: Date.parse(`01 Jan 1970 ${g} GMT`) / 1e3
         });
       }
-      if (d.match(/bitrate:/)) {
-        const g = d.replace(/bitrate:/, "").trim();
+      if (u.match(/bitrate:/)) {
+        const g = u.replace(/bitrate:/, "").trim();
         Object.assign(l, { bitrate: g });
       }
     }
   }
   if (r.match(/Stream #/)) {
-    const p = r.split(","), d = {
+    const p = r.split(","), u = {
       id: (t = (e = p == null ? void 0 : p.at(0)) == null ? void 0 : e.match(/[0-9]{1,2}:[0-9]{1,2}/)) == null ? void 0 : t.at(0)
     };
     if (r.match(/Video/)) {
-      const g = d;
+      const g = u;
       for (const f of p)
         f.match(/Video:/) && Object.assign(g, {
           codec: (i = (s = (o = f.match(/Video:\W*[a-z0-9_-]*\W/i)) == null ? void 0 : o.at(0)) == null ? void 0 : s.replace(/Video:/, "")) == null ? void 0 : i.trim()
@@ -48,7 +48,7 @@ const b = async (l) => {
       l.streams.video.push(g);
     }
     if (r.match(/Audio/)) {
-      const g = d;
+      const g = u;
       for (const f of p)
         f.match(/Audio:/) && Object.assign(g, {
           codec: (c = (n = (a = f.match(/Audio:\W*[a-z0-9_-]*\W/i)) == null ? void 0 : a.at(0)) == null ? void 0 : n.replace(/Audio:/, "")) == null ? void 0 : c.trim()
@@ -150,13 +150,22 @@ const b = async (l) => {
     try {
       switch (type) {
         case 'load': {
-          await loadCore(payload);
-          self.postMessage({
-            id,
-            type: 'load',
-            success: true,
-            payload: { ready: true },
-          });
+          try {
+            await loadCore(payload);
+            self.postMessage({
+              id,
+              type: 'load',
+              success: true,
+              payload: { ready: true },
+            });
+          } catch (error) {
+            self.postMessage({
+              id,
+              type: 'load',
+              success: false,
+              error: error?.message || String(error) || 'Failed to load FFmpeg core',
+            });
+          }
           break;
         }
         
@@ -444,12 +453,21 @@ const b = async (l) => {
             throw new Error('Core not loaded');
           }
           const { path, data } = payload;
-          core.FS.writeFile(path, new Uint8Array(data));
-          self.postMessage({
-            id,
-            type: 'writeFile',
-            success: true,
-          });
+          try {
+            core.FS.writeFile(path, new Uint8Array(data));
+            self.postMessage({
+              id,
+              type: 'writeFile',
+              success: true,
+            });
+          } catch (error) {
+            self.postMessage({
+              id,
+              type: 'writeFile',
+              success: false,
+              error: error?.message || String(error),
+            });
+          }
           break;
         }
         
@@ -458,14 +476,23 @@ const b = async (l) => {
             throw new Error('Core not loaded');
           }
           const { path } = payload;
-          const data = core.FS.readFile(path);
-          // Convert to array for transfer
-          self.postMessage({
-            id,
-            type: 'readFile',
-            success: true,
-            payload: { data: Array.from(data) },
-          });
+          try {
+            const data = core.FS.readFile(path);
+            // Convert to array for transfer
+            self.postMessage({
+              id,
+              type: 'readFile',
+              success: true,
+              payload: { data: Array.from(data) },
+            });
+          } catch (error) {
+            self.postMessage({
+              id,
+              type: 'readFile',
+              success: false,
+              error: error?.message || String(error) || ('Failed to read file: ' + path),
+            });
+          }
           break;
         }
         
@@ -501,34 +528,35 @@ const b = async (l) => {
           });
       }
     } catch (error) {
+      // Always include id in error response so it can be matched to pending messages
       self.postMessage({
         id,
-        type,
+        type: type || 'error',
         success: false,
-        error: error?.message || String(error),
+        error: error?.message || String(error) || 'Unknown error occurred',
       });
     }
   };
 `;
 class M {
   constructor({ logger: r, source: e }) {
-    u(this, "_worker", null);
-    u(this, "_logger", m);
-    u(this, "_source");
-    u(this, "_uris");
-    u(this, "_whenReady", []);
-    u(this, "_whenExecutionDone", []);
-    u(this, "_onMessage", []);
-    u(this, "_onProgress", []);
-    u(this, "_memory", []);
-    u(this, "_pendingMessages", /* @__PURE__ */ new Map());
-    u(this, "_messageIdCounter", 0);
-    u(this, "_currentExecId", null);
+    d(this, "_worker", null);
+    d(this, "_logger", m);
+    d(this, "_source");
+    d(this, "_uris");
+    d(this, "_whenReady", []);
+    d(this, "_whenExecutionDone", []);
+    d(this, "_onMessage", []);
+    d(this, "_onProgress", []);
+    d(this, "_memory", []);
+    d(this, "_pendingMessages", /* @__PURE__ */ new Map());
+    d(this, "_messageIdCounter", 0);
+    d(this, "_currentExecId", null);
     /**
      * Is true when the script has been
      * loaded successfully
      */
-    u(this, "isReady", !1);
+    d(this, "isReady", !1);
     this._source = e, this._logger = r, this.createWorker();
   }
   /**
@@ -571,16 +599,25 @@ class M {
       }
       if (s === "progress" && a !== void 0 && a !== null) {
         let c = null;
-        const p = (d) => isFinite(d) ? d >= 0 && d <= 1 || d > 0 && d < 1e7 : !1;
-        typeof a == "number" ? p(a) && (c = a) : a && typeof a.progress == "number" ? p(a.progress) && (c = a) : a && typeof a.time == "number" && isFinite(a.time) && a.time >= 0 && a.time < 86400 * 365 && (c = a), c !== null ? (console.log("FFmpeg progress:", c, "callbacks:", this._onProgress.length), this._onProgress.forEach((d) => d(c))) : console.log("FFmpeg progress rejected:", { payload: a, type: typeof a });
+        const p = (u) => isFinite(u) ? u >= 0 && u <= 1 || u > 0 && u < 1e7 : !1;
+        typeof a == "number" ? p(a) && (c = a) : a && typeof a.progress == "number" ? p(a.progress) && (c = a) : a && typeof a.time == "number" && isFinite(a.time) && a.time >= 0 && a.time < 86400 * 365 && (c = a), c !== null ? (console.log("FFmpeg progress:", c, "callbacks:", this._onProgress.length), this._onProgress.forEach((u) => u(c))) : console.log("FFmpeg progress rejected:", { payload: a, type: typeof a });
         return;
       }
       if ((s === "exec" || s === "terminate") && this._whenExecutionDone.forEach((c) => c()), o && this._pendingMessages.has(o)) {
         const { resolve: c, reject: p } = this._pendingMessages.get(o);
-        this._pendingMessages.delete(o), i ? c(a) : p(new Error(n || "Unknown error"));
-      }
+        if (this._pendingMessages.delete(o), i)
+          c(a);
+        else {
+          const u = n || "Unknown error occurred";
+          p(new Error(u));
+        }
+      } else
+        !i && n && this._logger(`Unhandled worker error: ${n}`);
     }, this._worker.onerror = (t) => {
       this._logger("Worker error:", t), this.handleMessage(`Worker error: ${t.message}`);
+      const o = t.message || "Worker error occurred";
+      for (const [s, { reject: i }] of this._pendingMessages.entries())
+        this._pendingMessages.delete(s), i(new Error(`Worker error: ${o}`));
     }, !this._uris)
       throw new Error("URIs not initialized");
     try {
@@ -671,8 +708,14 @@ class M {
    * Read a file that is stored in the memfs
    */
   async readFile(r) {
-    const e = await this.sendWorkerMessage("readFile", { path: r });
-    return new Uint8Array(e.data);
+    try {
+      const e = await this.sendWorkerMessage("readFile", { path: r });
+      if (!e || !e.data)
+        throw new Error(`Failed to read file: ${r} - no data returned`);
+      return new Uint8Array(e.data);
+    } catch (e) {
+      throw e.message && !e.message.includes(r) ? new Error(`Failed to read file ${r}: ${e.message}`) : e;
+    }
   }
   /**
    * Delete a file that is stored in the memfs
@@ -687,8 +730,12 @@ class M {
    * Write a file to the memfs
    */
   async writeFile(r, e) {
-    const t = await b(e);
-    await this.sendWorkerMessage("writeFile", { path: r, data: Array.from(t) }), this._memory.push(r);
+    try {
+      const t = await b(e);
+      await this.sendWorkerMessage("writeFile", { path: r, data: Array.from(t) }), this._memory.push(r);
+    } catch (t) {
+      throw t.message && !t.message.includes(r) ? new Error(`Failed to write file ${r}: ${t.message}`) : t;
+    }
   }
   /**
    * Call this method to delete all files that
@@ -710,9 +757,9 @@ class S extends M {
     let t = console.log, o = k[(e == null ? void 0 : e.config) ?? "lgpl-base"];
     (e == null ? void 0 : e.log) == !1 && (t = m), e != null && e.source && (o = e.source);
     super({ logger: t, source: o });
-    u(this, "_inputs", []);
-    u(this, "_output");
-    u(this, "_middleware", []);
+    d(this, "_inputs", []);
+    d(this, "_output");
+    d(this, "_middleware", []);
   }
   /**
    * Get all supported video decoders, encoders and
