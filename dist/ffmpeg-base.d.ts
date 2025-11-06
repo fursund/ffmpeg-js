@@ -11,6 +11,7 @@ export declare class FFmpegBase {
     private _memory;
     private _pendingMessages;
     private _messageIdCounter;
+    private _currentExecId;
     /**
      * Is true when the script has been
      * loaded successfully
@@ -60,6 +61,10 @@ export declare class FFmpegBase {
      * Use this message to execute ffmpeg commands
      */
     exec(args: string[]): Promise<void>;
+    /**
+     * Terminate the currently running FFmpeg operation
+     */
+    terminate(): Promise<void>;
     /**
      * Read a file that is stored in the memfs
      */
