@@ -370,6 +370,7 @@
       let currentArgs = null;
       let currentStartTime = null;
       let lastProgressSize = null; // Track last size from progress
+      let completionError = null; // Track errors from completeOperation
 
       function log(message, type = 'info') {
         const entry = document.createElement('div');
@@ -504,7 +505,12 @@
         
         // Read output file
         log(`Reading output file: ${outputFileName}...`);
-        const outputData = await ffmpeg.readFile(outputFileName);
+        let outputData;
+        try {
+          outputData = await ffmpeg.readFile(outputFileName);
+        } catch (readError) {
+          throw new Error(`Failed to read output file ${outputFileName}: ${readError.message}`);
+        }
         log(`Output file read: ${outputFileName} (${(outputData.length / 1024 / 1024).toFixed(2)} MB)`, 'success');
         
         // Create download link
@@ -626,25 +632,27 @@
           const displaySize = sizeBytes !== null && sizeBytes !== undefined ? sizeBytes : lastProgressSize;
           console.log('Updating progress UI:', percent + '%', displaySize ? `(${formatBytes(displaySize)})` : '', frameNum ? `frame ${frameNum}` : '');
           
-          // If we reach 100%, automatically complete the operation
-          if (percent >= 100 && currentArgs && currentStartTime) {
-            // Show 100% with size and frame before completing
-            if (progressBar && progressText && progressDetails) {
-              progressBar.style.width = '100%';
-              progressText.textContent = '100%';
-              const sizeText = displaySize ? ` (${formatBytes(displaySize)})` : '';
-              const frameText = frameNum ? ` - Frame ${frameNum}` : '';
-              progressDetails.textContent = `100% complete${sizeText}${frameText}`;
+            // If we reach 100%, automatically complete the operation
+            if (percent >= 100 && currentArgs && currentStartTime) {
+              // Show 100% with size and frame before completing
+              if (progressBar && progressText && progressDetails) {
+                progressBar.style.width = '100%';
+                progressText.textContent = '100%';
+                const sizeText = displaySize ? ` (${formatBytes(displaySize)})` : '';
+                const frameText = frameNum ? ` - Frame ${frameNum}` : '';
+                progressDetails.textContent = `100% complete${sizeText}${frameText}`;
+              }
+              completeOperation(currentArgs, currentStartTime).catch(error => {
+                log(`Error completing operation: ${error.message}`, 'error');
+                updateStatus('error', `Error: ${error.message}`);
+                isExecuting = false;
+                hasCompleted = true;
+                completionError = error; // Store error to be checked later
+                processBtn.disabled = false;
+                processBtn.textContent = 'Process File';
+              });
+              return;
             }
-            completeOperation(currentArgs, currentStartTime).catch(error => {
-              log(`Error completing operation: ${error.message}`, 'error');
-              isExecuting = false;
-              hasCompleted = true;
-              processBtn.disabled = false;
-              processBtn.textContent = 'Process File';
-            });
-            return;
-          }
           
           // Update UI using requestAnimationFrame for consistency
           requestAnimationFrame(() => {
@@ -686,8 +694,10 @@
             if (percent >= 100 && currentArgs && currentStartTime) {
               completeOperation(currentArgs, currentStartTime).catch(error => {
                 log(`Error completing operation: ${error.message}`, 'error');
+                updateStatus('error', `Error: ${error.message}`);
                 isExecuting = false;
                 hasCompleted = true;
+                completionError = error; // Store error to be checked later
                 processBtn.disabled = false;
                 processBtn.textContent = 'Process File';
               });
@@ -784,6 +794,7 @@
           currentArgs = null;
           currentStartTime = null;
           lastProgressSize = null;
+          completionError = null; // Reset completion error
           progressBar.style.width = '0%';
           progressText.textContent = '0%';
           progressDetails.textContent = '';
@@ -824,10 +835,17 @@
           
           // Execute command - completion will be handled by progress callback at 100%
           // or by the catch block if there's an error
+          // If exec fails, it will throw an error which will be caught below
           await ffmpeg.exec(args);
+          
+          // Check if completion from progress callback failed
+          if (completionError) {
+            throw completionError;
+          }
           
           // If we get here and haven't completed yet (progress callback didn't fire at 100%),
           // complete the operation now
+          // If completeOperation fails, it will throw an error which will be caught below
           if (!hasCompleted) {
             await completeOperation(args, currentStartTime);
           }
@@ -841,6 +859,7 @@
           hasCompleted = false;
           currentArgs = null;
           currentStartTime = null;
+          completionError = null; // Reset completion error
           
           // Hide progress container
           if (progressContainer) {

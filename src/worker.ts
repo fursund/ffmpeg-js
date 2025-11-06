@@ -95,13 +95,22 @@ export const workerScript = `
     try {
       switch (type) {
         case 'load': {
-          await loadCore(payload);
-          self.postMessage({
-            id,
-            type: 'load',
-            success: true,
-            payload: { ready: true },
-          });
+          try {
+            await loadCore(payload);
+            self.postMessage({
+              id,
+              type: 'load',
+              success: true,
+              payload: { ready: true },
+            });
+          } catch (error) {
+            self.postMessage({
+              id,
+              type: 'load',
+              success: false,
+              error: error?.message || String(error) || 'Failed to load FFmpeg core',
+            });
+          }
           break;
         }
         
@@ -389,12 +398,21 @@ export const workerScript = `
             throw new Error('Core not loaded');
           }
           const { path, data } = payload;
-          core.FS.writeFile(path, new Uint8Array(data));
-          self.postMessage({
-            id,
-            type: 'writeFile',
-            success: true,
-          });
+          try {
+            core.FS.writeFile(path, new Uint8Array(data));
+            self.postMessage({
+              id,
+              type: 'writeFile',
+              success: true,
+            });
+          } catch (error) {
+            self.postMessage({
+              id,
+              type: 'writeFile',
+              success: false,
+              error: error?.message || String(error),
+            });
+          }
           break;
         }
         
@@ -403,14 +421,23 @@ export const workerScript = `
             throw new Error('Core not loaded');
           }
           const { path } = payload;
-          const data = core.FS.readFile(path);
-          // Convert to array for transfer
-          self.postMessage({
-            id,
-            type: 'readFile',
-            success: true,
-            payload: { data: Array.from(data) },
-          });
+          try {
+            const data = core.FS.readFile(path);
+            // Convert to array for transfer
+            self.postMessage({
+              id,
+              type: 'readFile',
+              success: true,
+              payload: { data: Array.from(data) },
+            });
+          } catch (error) {
+            self.postMessage({
+              id,
+              type: 'readFile',
+              success: false,
+              error: error?.message || String(error) || ('Failed to read file: ' + path),
+            });
+          }
           break;
         }
         
@@ -446,11 +473,12 @@ export const workerScript = `
           });
       }
     } catch (error) {
+      // Always include id in error response so it can be matched to pending messages
       self.postMessage({
         id,
-        type,
+        type: type || 'error',
         success: false,
-        error: error?.message || String(error),
+        error: error?.message || String(error) || 'Unknown error occurred',
       });
     }
   };

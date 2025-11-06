@@ -159,14 +159,27 @@ export class FFmpegBase {
         if (success) {
           resolve(payload);
         } else {
-          reject(new Error(error || 'Unknown error'));
+          // Ensure we always throw an error when success is false
+          const errorMessage = error || 'Unknown error occurred';
+          reject(new Error(errorMessage));
         }
+      } else if (!success && error) {
+        // If we get an error message without a matching pending message,
+        // log it as it might indicate a serious issue
+        this._logger(`Unhandled worker error: ${error}`);
       }
     };
 
     this._worker.onerror = (error) => {
       this._logger('Worker error:', error);
       this.handleMessage(`Worker error: ${error.message}`);
+      
+      // Reject all pending messages when worker crashes
+      const errorMessage = error.message || 'Worker error occurred';
+      for (const [id, { reject }] of this._pendingMessages.entries()) {
+        this._pendingMessages.delete(id);
+        reject(new Error(`Worker error: ${errorMessage}`));
+      }
     };
 
     // Load the core in the worker
@@ -305,8 +318,19 @@ export class FFmpegBase {
    * Read a file that is stored in the memfs
    */
   public async readFile(path: string): Promise<Uint8Array> {
-    const result = await this.sendWorkerMessage('readFile', { path });
-    return new Uint8Array(result.data);
+    try {
+      const result = await this.sendWorkerMessage('readFile', { path });
+      if (!result || !result.data) {
+        throw new Error(`Failed to read file: ${path} - no data returned`);
+      }
+      return new Uint8Array(result.data);
+    } catch (error: any) {
+      // Re-throw with more context if needed
+      if (error.message && !error.message.includes(path)) {
+        throw new Error(`Failed to read file ${path}: ${error.message}`);
+      }
+      throw error;
+    }
   }
 
   /**
@@ -324,9 +348,17 @@ export class FFmpegBase {
    * Write a file to the memfs
    */
   public async writeFile(path: string, file: string | Blob): Promise<void> {
-    const data: Uint8Array = await toUint8Array(file);
-    await this.sendWorkerMessage('writeFile', { path, data: Array.from(data) });
-    this._memory.push(path);
+    try {
+      const data: Uint8Array = await toUint8Array(file);
+      await this.sendWorkerMessage('writeFile', { path, data: Array.from(data) });
+      this._memory.push(path);
+    } catch (error: any) {
+      // Re-throw with more context if needed
+      if (error.message && !error.message.includes(path)) {
+        throw new Error(`Failed to write file ${path}: ${error.message}`);
+      }
+      throw error;
+    }
   }
 
   /**
